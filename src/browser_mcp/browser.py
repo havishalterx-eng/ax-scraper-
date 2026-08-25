@@ -72,6 +72,15 @@ async def _block_route(route: Route) -> None:
     await route.continue_()
 
 
+def _headless_enabled() -> bool:
+    return os.environ.get("HEADLESS", "0") in ("1", "true", "True")
+
+
+def _extra_launch_args() -> list[str]:
+    raw = os.environ.get("BROWSER_MCP_EXTRA_ARGS", "")
+    return raw.split() if raw else []
+
+
 def _proxy_config() -> dict[str, str] | None:
     """Reads PROXY_SERVER/PROXY_USERNAME/PROXY_PASSWORD from the environment.
 
@@ -121,6 +130,11 @@ class BrowserSession:
     kept, truncated; other content types logged without a body) - this is
     what lets an agent find the real API behind a page instead of scraping
     rendered HTML. Accumulates until cleared; never auto-clears on navigate.
+
+    Headless defaults to off (HEADLESS=1 to enable) - deliberate for local
+    use, so you can watch it work. A container has no display at all, so
+    the Dockerfile sets HEADLESS=1; forgetting this crashes the launch
+    outright, not something to find out at deploy time.
     """
 
     def __init__(self, playwright: Playwright) -> None:
@@ -154,7 +168,9 @@ class BrowserSession:
             if self._page is None or self._page.is_closed():
                 if self._browser is None or not self._browser.is_connected():
                     self._browser = await self._playwright.chromium.launch(
-                        headless=False, proxy=_proxy_config()
+                        headless=_headless_enabled(),
+                        proxy=_proxy_config(),
+                        args=_extra_launch_args(),
                     )
                 self._page = await self._browser.new_page()
                 if _block_media_enabled() or _block_trackers_enabled():

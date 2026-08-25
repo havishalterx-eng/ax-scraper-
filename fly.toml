@@ -1,0 +1,14 @@
+# Private-only deployment - deliberately no [http_service]/[[services]]
+# block, so Fly does not provision a public IP. Reachable only through
+# Fly's private 6PN network via `fly proxy 8000:8000 -a browser-mcp`
+# (WireGuard-based, not internet-exposed). No auth on the app itself yet,
+# which is fine only because of this - do NOT add a public IP without
+# adding real auth first (see README).
+app = "browser-mcp"
+primary_region = "iad"
+
+[build]
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
