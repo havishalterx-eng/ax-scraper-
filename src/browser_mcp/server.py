@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from mcp.server import MCPServer
 
 from .browser import manager
@@ -182,7 +184,15 @@ async def close_browser(session: str = DEFAULT_SESSION) -> str:
 
 
 def main() -> None:
-    mcp.run()
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    if transport == "stdio":
+        mcp.run()
+    else:
+        mcp.run(
+            transport=transport,
+            host=os.environ.get("HOST", "0.0.0.0"),
+            port=int(os.environ.get("PORT", "8000")),
+        )
 
 
 if __name__ == "__main__":

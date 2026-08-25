@@ -116,10 +116,27 @@ project's memory for the full context.
   claim implies a much bigger pool plus request pacing, not just "have a
   residential IP." Not a bug in this tool; a scale/budget question.
 
+**Network transport — done, verified real:** the server ran only over stdio
+(local subprocess) until now, which meant it could never be reached from
+anywhere but the machine running it - a real blocker for any cloud host.
+`MCP_TRANSPORT=streamable-http` switches it to a real network server
+(`HOST`/`PORT` configurable, defaults `0.0.0.0:8000`); unset, it's still
+plain stdio, so the existing local Claude Code registration is untouched.
+Verified for real: started the server over HTTP as a background process,
+connected a separate MCP client over the network, listed all 11 tools, and
+ran a real `browser_open` through it - not just "the process starts."
+
+No auth wired in yet - fine for now since nothing is deployed anywhere
+network-reachable, but a real requirement before actually exposing this on
+a cloud host (Fly.io is the current plan - cost and Chromium-in-container
+notes saved to project memory).
+
 **Not built yet (later phases):**
 
-- CAPTCHA solving (needs a 2Captcha/CapSolver account)
+- CAPTCHA solving - deliberately deferred to the production-ready phase,
+  see project memory for the full vendor shortlist already researched
 - Full any-device remote-assist (needs a real remote deployment first)
+- Auth on the network transport (needed before any public/cloud exposure)
 
 ## Setup
 
@@ -146,10 +163,16 @@ package into `.venv/site-packages`, which is stable. Re-run
 
 ## Running it
 
-As an MCP server (stdio transport) for any MCP client:
+As an MCP server (stdio transport, default) for any local MCP client:
 
 ```bash
 .venv/bin/browser-mcp
+```
+
+Over the network (streamable-http), for a remote host:
+
+```bash
+MCP_TRANSPORT=streamable-http PORT=8000 .venv/bin/browser-mcp
 ```
 
 ## Verifying it
