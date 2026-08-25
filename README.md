@@ -98,12 +98,28 @@ project's memory for the full context.
   through the actual MCP protocol with a brand-new query ("desert") never
   part of the original exploration - status 200, correct real data.
 
+**Residential/ISP proxy + rotation — done, tested against Amazon specifically:**
+
+- Bright Data ISP zone set up (5 IPs, Shared unlimited, $10/month - real
+  charge, confirmed before spending it). Residential proper needs a
+  business account + KYC through Bright Data's compliance team - that's
+  the user's own identity verification, not something built around.
+- `PROXY_ROTATE=1` env var: each named session gets a distinct IP for its
+  lifetime (`-session-<random>` suffix, a Bright Data convention). Verified
+  real: 3 different real locations (Virginia, LA, Chicago) across a few
+  draws from the 5-IP pool. A 1-IP zone can't rotate at all - confirmed
+  that too, before spending money to fix it.
+- Honest result against Amazon specifically: single static IP succeeded
+  ~1 in 5 attempts (mostly HTTP 503, Amazon's soft anti-bot signal); with
+  rotation, 2 in 5. Real improvement, still far from reliable - Amazon is
+  one of the hardest targets that exists, and BrowserAct's own "99.9%"
+  claim implies a much bigger pool plus request pacing, not just "have a
+  residential IP." Not a bug in this tool; a scale/budget question.
+
 **Not built yet (later phases):**
 
 - CAPTCHA solving (needs a 2Captcha/CapSolver account)
 - Full any-device remote-assist (needs a real remote deployment first)
-- Per-session proxy assignment (all sessions currently share one proxy
-  identity from the environment)
 
 ## Setup
 

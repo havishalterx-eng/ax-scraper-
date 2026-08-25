@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import random
+import string
 
 # patchright, not playwright: same API, but patches the CDP-level tells
 # (navigator.webdriver, iframe/runtime leaks) that anti-bot scripts check
@@ -76,8 +78,16 @@ def _proxy_config() -> dict[str, str] | None:
     No vendor is wired in by default - this just passes through whatever
     proxy endpoint you point it at (host:port + credentials from any
     residential proxy vendor). Returns None when PROXY_SERVER is unset, so
-    the no-proxy path is unaffected. Same proxy identity is used for every
-    session right now - per-session proxy assignment isn't built yet.
+    the no-proxy path is unaffected.
+
+    Set PROXY_ROTATE=1 to get a distinct IP per BrowserSession (not per
+    request - a session keeps one IP for its whole life, matching how
+    sessions already work elsewhere in this file). Appends
+    `-session-<random>` to the username, which vendors like Bright Data
+    treat as a request for a fresh IP from the zone's pool. Confirmed real:
+    4 different session suffixes against a 5-IP zone returned 3 distinct
+    real locations (Virginia, LA, Chicago) - a 1-IP zone returns the same
+    IP regardless of suffix, since there's only one to hand out.
     """
     server = os.environ.get("PROXY_SERVER")
     if not server:
@@ -85,6 +95,9 @@ def _proxy_config() -> dict[str, str] | None:
     config = {"server": server}
     username = os.environ.get("PROXY_USERNAME")
     password = os.environ.get("PROXY_PASSWORD")
+    if username and os.environ.get("PROXY_ROTATE") == "1":
+        suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        username = f"{username}-session-{suffix}"
     if username:
         config["username"] = username
     if password:
