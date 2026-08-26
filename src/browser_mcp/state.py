@@ -56,9 +56,21 @@ STATE_JS = r"""
 """
 
 
+# A real search page can expose several hundred interactive elements. Sending
+# all of them on every navigation is what pushes an agent conversation over
+# the model's input limit after a handful of steps (seen for real on Amazon).
+# The tail of that list is almost always footer/nav chrome, not what the agent
+# is about to click, so cap it and say so.
+MAX_STATE_ITEMS = 120
+
+
 def format_state(data: dict[str, Any]) -> str:
     lines = [f"url={data['url']}", f"title={data['title']}", ""]
     items = data.get("items", [])
+    total = len(items)
+    truncated = total > MAX_STATE_ITEMS
+    if truncated:
+        items = items[:MAX_STATE_ITEMS]
     for item in items:
         attrs = []
         if item["type"]:
@@ -76,4 +88,10 @@ def format_state(data: dict[str, Any]) -> str:
         lines.append(line)
     if not items:
         lines.append("(no interactive elements found)")
+    if truncated:
+        lines.append(
+            f"\n[showing first {MAX_STATE_ITEMS} of {total} interactive elements - "
+            "the rest are usually footer/nav links. To harvest listing data, use "
+            "extract_records instead of clicking through these.]"
+        )
     return "\n".join(lines)

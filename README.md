@@ -143,12 +143,209 @@ auth needed), so updates are `./deploy.sh` - pulls the new commit, rebuilds,
 restarts the container. Replaces what used to be a manual tar/scp/build
 cycle.
 
+**Phase 3 (HTTP API + real backend for the frontends) — done, verified live:**
+
+- `src/browser_mcp/api.py` - a plain Starlette/uvicorn HTTP API (`browser-mcp-api`
+  entrypoint, default port 8787) over the same tools, called in-process via
+  `mcp.call_tool()` - no MCP client, no subprocess. Exists because MCP's own
+  transports are for LLM/agent clients, not a browser's `fetch()`. No auth -
+  deliberate, this is local/private, not behind a public page.
+- `/tasks` runs the same tool-use loop as `bedrock_agent.py` as a background
+  job instead of a blocking CLI script; `needs_human` status + `/resume`
+  replaces the old blocking `input()`. `/tasks/{id}/cancel` really cancels
+  the underlying asyncio task, not just marks a flag - verified: cancelled
+  mid-run, log stopped growing immediately.
+- **Saved, versioned, reusable agents are real now** (`agents.py`, SQLite at
+  `data/browser-mcp.db`, gitignored) - `/agents` create/list/get/update/
+  delete, `/agents/{id}/run` triggers a real run against the agent's own
+  dedicated session, `/agents/{id}` returns real version history and real
+  run history. Verified: created an agent, ran it twice, versioned its
+  prompt, confirmed both runs and both versions persisted - including
+  across a full process restart (SQLite, not memory).
+- **Scheduling is real** - `PUT /agents/{id}/schedule` (daily/weekly/monthly),
+  a background loop checked every 60s. Verified live: scheduled a run 2
+  minutes out, walked away, came back to a real new run in that agent's
+  history with no manual trigger.
+- **Fresh vs signed-in sessions are real** - `browser_open(..., persistent=True)`
+  now uses `launch_persistent_context` with an on-disk profile per session
+  name (`data/profiles/<name>`) instead of a throwaway context. Verified
+  across two separate Python processes: wrote to `localStorage` in process
+  A, closed it, a fresh process B reopening the same session name read it
+  back. A `persistent=False` session confirmed NOT to survive, same test.
+- **Webhook delivery is real** - an agent with `webhook_url` set gets a real
+  POST with its result on every completed run. Verified with a throwaway
+  local listener actually receiving the payload.
+- **Structured export is real, not just prose wrapped in a file extension** -
+  the system prompt asks the model to end with a fenced ```json block when
+  a task asks for records; the API parses it into `structured_result`
+  separate from the prose. When the model actually returns one, real
+  CSV/JSON export works from real data. When it doesn't, the UI says so
+  instead of showing anything invented.
+- **Model swapped: Mistral Large → Amazon Nova Pro** (`apac.amazon.nova-pro-v1:0`).
+  Mistral frequently narrated a tool call as prose instead of actually
+  invoking it, especially on longer/vaguer tasks - confirmed by direct
+  comparison, same kind of task run twice. Re-checked Bedrock access before
+  switching: Anthropic models are still hard-blocked on this account
+  (`INVALID_PAYMENT_INSTRUMENT`, re-confirmed live against Claude 3.5
+  Sonnet) - a real AWS Marketplace billing issue, not something fixable
+  from code. Nova Pro isn't gated by that (Amazon's own model, separate
+  from the Anthropic Marketplace subscription) and is dramatically more
+  reliable at actually calling tools - verified running the full real
+  loop end to end: opened Amazon, searched, extracted 5 real products by
+  index, returned real structured JSON. Its own real weak spot, seen in
+  that same test: it can fabricate a plausible-looking value for a field
+  it never actually extracted (invented a `price` field when it had only
+  pulled title+rating) rather than honestly omitting it - so structured
+  output still wants a skeptical read, not blind trust. Switch to Claude
+  with `BEDROCK_MODEL_ID=apac.anthropic.claude-3-7-sonnet-20250219-v1:0`
+  (or newer) once the Marketplace billing is fixed - the loop doesn't
+  care which model it's talking to.
+- **Known real limit on region routing**: the region selector some UIs show
+  has no backend behind it. The one proxy zone actually set up (Bright Data
+  ISP, Phase 2) is 5 fixed US IPs with no per-country targeting - that needs
+  the Residential product plus KYC, explicitly not set up. Selecting a
+  country in a UI does not change the real exit IP's country; don't wire it
+  to look like it does.
+
+**Phase 4 (watchable runs + bulk extraction) — done, verified live:**
+
+- **`extract_records` - the change that made this a scraper instead of a demo.**
+  A real run of "top 50 wireless headphones with 5 fields each" died at
+  `stopped after 15 steps` having collected *two* products, because the only
+  way to read data was `get_text(index)` once per field - ~250 calls. The new
+  tool finds the page's repeated record structure itself (sibling elements
+  sharing a structural signature) and returns every item with its fields
+  already parsed, in ONE call. Same Amazon page: 16 records, one call, two
+  steps. Field parsing is pattern-based (currency shape, "N out of 5" shape,
+  longest anchor as title), not site-specific, so it degrades to text+links
+  on an unfamiliar page rather than breaking.
+  - Two real parser bugs found and fixed by checking output against the live
+    page rather than trusting it: review counts were echoing the price (sites
+    split the currency symbol into its own span, leaving a bare "899" that
+    looks identical to a review count - now excluded by value and by price
+    container), and `seller` was matching the word "by" inside ordinary
+    product titles and inventing sellers that were never on the page (now
+    requires an explicit "sold by"/"seller:" label).
+- **`scroll_page`** for lazy-loaded lists. When a page doesn't grow it says so
+  explicitly and tells the agent to paginate instead - added after watching a
+  real run scroll an exhausted page three times in a row.
+- **Context-overflow handling.** A real run died with `Input Tokens Exceeded`:
+  every tool result accumulates in the conversation, and a search page's
+  element dump is enormous. Three fixes: tool results are capped before
+  entering the conversation (full text still reaches the activity log), old
+  tool results are compacted *in place* when the conversation grows past a
+  threshold (in place, not dropped - Bedrock requires every toolUse to keep
+  its matching toolResult), and the state dump caps at 120 elements with a
+  note saying so.
+- **`MAX_STEPS` raised 15 -> 60** (env-configurable). 15 predated bulk
+  extraction and was not enough for any real multi-page harvest.
+- **Fail-fast element handling.** A model guessing `index=0` (indices start at
+  1) used to hang for Playwright's full 30s default timeout and then return a
+  wall of locator internals. Now an invalid index answers instantly with the
+  valid range; click/type failures explain the likely cause (overlay,
+  off-screen, not a text field) instead of raising.
+- **Page-settle retry.** `domcontentloaded` fires before a script-rendered
+  page paints anything clickable, so scanning right after navigation found
+  zero elements on amazon.in and sent the agent into a human-help detour.
+  One short settle-and-retry removed that failure mode.
+- **Live view**: `/sessions/{name}/live` returns screenshot + url + title in a
+  single response (one call, so the picture and the address can't straddle a
+  navigation). `BLOCK_MEDIA` now defaults OFF - blocking images saved a
+  measured 8-11% and made every live frame render with holes in it.
+- **Talk to a running agent**: `POST /tasks/{id}/message`. Mid-run it's
+  injected at the next step; after a run finishes the loop restarts from the
+  existing conversation, so the agent still remembers the page and everything
+  it extracted. Verified: asked a finished run "which of these has the best
+  rating and what is its price" and got a correct answer read off its own
+  real harvest.
+- **Jobs persist to SQLite** (`/tasks` list, `/tasks/{id}` falls back to disk),
+  so run history survives a restart. Verified in the console UI, which labels
+  recovered runs "from disk".
+- **Structured-output parsing hardened**: accepts ```json fences, bare ```
+  fences, and unfenced arrays, and salvages the complete objects from an
+  array truncated by the step budget. A real 50-record harvest was being
+  thrown away because the model used a bare fence.
+
+**Phase 5 (pagination + honest data path) — done, verified live:**
+
+- **`extract_records` follows pagination itself.** Asking for 50 items from a
+  site that shows 16 per page used to return 16 (or 6, when the model gave up
+  early). It now detects the page parameter in the URL (`page=N` number-style
+  and `start=N`/`offset=N` record-style, which must be advanced differently -
+  guessing wrong silently reruns page 1 forever), walks the pages,
+  de-duplicates across them, and stops when it has enough or the site stops
+  producing new rows. Verified: 4 real Amazon pages, 64 unique records.
+- **The model no longer carries the data.** A run where the tool correctly
+  extracted 50 records ended with **2** in the final answer - Nova simply will
+  not retype 50 rows x 6 fields into a JSON block. Extractions are now kept
+  server-side and attached to the job directly; the model only summarises.
+  Jobs report `records_source`: `extracted` (read from the page) or `model`
+  (assembled by the model, worth spot-checking), surfaced as a badge in the
+  console. This is the difference between a downloadable dataset and a
+  paraphrase of one.
+- **Loop breaker.** A real lead-gen run called `extract_records` 18 times -
+  the last five byte-identical - and burned all 60 steps. Three identical
+  results for the same tool+args now append an explicit instruction to change
+  approach or finish with what it has.
+- **`scroll_page` scrolls inner panels too.** Google Maps renders results in
+  its own fixed-height scrolling div, so scrolling the window did nothing and
+  no further results ever loaded - the direct cause of that looping run. It
+  now finds the largest scrollable element and scrolls that as well.
+- **Manually closing a browser window now closes the session.** Playwright
+  keeps its browser process alive when the window's own X is used, so the
+  session became a zombie: no window, 7-9 Chromium processes still resident,
+  still listed in the UI, and the next run silently reopened inside it.
+  A page-close handler reaps the session. Verified: 9 processes -> 0, session
+  gone from the list, other sessions unaffected.
+
+**Phase 6 (templates + full console IA) — done, verified live:**
+
+- **Templates are real** (`templates.py`, `/templates`, `/templates/{id}/use`).
+  12 starting points whose prompts are shaped around what the tools actually
+  do well - land on a results URL, name the fields, state a count. A blank
+  prompt box was the hardest part of using this: the difference between a run
+  that finishes in 3 steps and one that loops until the budget dies is almost
+  entirely phrasing. Each has typed inputs (search term, location, count) and
+  can either run once or be saved as a versioned, schedulable agent. Verified
+  end to end through the UI: Hacker News template returned 30 real records in
+  1 step.
+- **`/infrastructure`** reports the runtime's real configuration - proxy,
+  stealth, CAPTCHA, delivery - read from the environment, with credentials
+  never echoed (only whether they're present).
+- **`list_agents` now returns `run_count`, `last_run_at`, `schedule_active`**
+  so the agents list can filter and sort without one request per card.
+- **Console rebuilt around a grouped sidebar** (Home / Templates / Agents,
+  then Runtime, then Infrastructure) with the headless toggle in the footer.
+  Home is a dashboard: hero composer, live template row, real activity stats.
+  Agents is a card grid with search + filters and inline run/delete. Proxies
+  and Delivery state plainly what is and isn't configured, naming the exact
+  env var that would change it, rather than showing a disabled control that
+  implies a feature is one click away.
+- Layout and information architecture follow common SaaS conventions
+  (sidebar + card grid + template gallery); the visual identity is AlterX's
+  own - black, off-white, `#FF4D0A` - with our own copy throughout.
+
+**AX Scraper Console (`../ax-scraper-app`) — the product UI, done:**
+
+A real operating console, not a marketing page: live browser view that polls
+the running session (fast while active, slow when idle), colour-coded
+activity feed with expandable entries, results table with real CSV/JSON
+export, chat box for talking to the agent, saved-agent management with
+versions/schedules/run history, session list, and run history including
+restored-from-disk runs. Every control is wired to a real endpoint - verified
+end to end by driving the UI itself, not just the API.
+
 **Not built yet (later phases):**
 
 - CAPTCHA solving - deliberately deferred to the production-ready phase,
   see project memory for the full vendor shortlist already researched
 - Full any-device remote-assist (needs a real remote deployment first)
-- Auth on the network transport (needed before any public/cloud exposure)
+- Auth on the network transport and on the HTTP API (needed before any
+  public/cloud exposure of either)
+- Real per-country proxy routing (needs a Residential proxy product + KYC,
+  or per-country vendor accounts - not signed up for)
+- Delivery integrations beyond a plain webhook (Make/n8n/Zapier/email/cloud
+  storage) - each needs its own vendor credentials/OAuth app, none set up
 
 ## Setup
 

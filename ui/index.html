@@ -16,6 +16,7 @@
   ::-webkit-scrollbar-track { background: transparent; }
   input::placeholder { color: rgba(255,255,255,0.35); }
   button { font: inherit; cursor: pointer; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
 
   #app { display:flex; flex-direction:column; width:100%; height:100vh; background:#050505; color:#f5f4f1; font-family:'Hanken Grotesk',-apple-system,'system-ui','Segoe UI',sans-serif; overflow:hidden; }
 
@@ -27,7 +28,9 @@
   .wordmark .sub { font-size:12px; color:rgba(255,255,255,0.4); font-weight:500; }
   .topbar-right { display:flex; align-items:center; gap:16px; }
   .status-dot-row { display:flex; align-items:center; gap:7px; font-size:12.5px; color:rgba(255,255,255,0.55); }
-  .status-dot { width:7px; height:7px; background:#3ddc84; display:inline-block; }
+  .status-dot { width:7px; height:7px; display:inline-block; }
+  .status-dot.up { background:#3ddc84; }
+  .status-dot.down { background:#ff5c5c; }
   .btn-ghost { display:flex; align-items:center; gap:7px; background:transparent; border:1px solid rgba(255,255,255,0.18); color:#f5f4f1; font-size:13px; font-weight:600; padding:8px 14px; }
 
   .body { display:flex; flex-direction:row; flex-grow:1; min-height:0; }
@@ -37,6 +40,7 @@
   .sidebar-label { font-size:11px; font-weight:700; letter-spacing:1.2px; color:rgba(255,255,255,0.45); text-transform:uppercase; }
   .sidebar-count { font-size:11px; color:rgba(255,255,255,0.35); }
   .session-list { display:flex; flex-direction:column; gap:2px; padding:0 10px; overflow-y:auto; flex-grow:1; }
+  .session-empty { padding:18px 10px; font-size:12.5px; color:rgba(255,255,255,0.4); line-height:1.6; }
   .session-card { display:flex; flex-direction:column; gap:6px; padding:12px 10px; cursor:pointer; border:1px solid rgba(255,255,255,0.1); background:transparent; }
   .session-card.selected { border-color:var(--accent); background:rgba(255,77,10,0.08); }
   .session-row { display:flex; align-items:center; justify-content:space-between; }
@@ -45,13 +49,11 @@
   .session-name { font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .session-status { font-size:10px; font-weight:600; letter-spacing:0.3px; text-transform:uppercase; flex-shrink:0; }
   .session-url { font-size:11.5px; color:rgba(255,255,255,0.45); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-left:14px; }
-  .session-badges { display:flex; gap:6px; padding-left:14px; }
-  .badge { font-size:10px; padding:2px 6px; background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.6); }
-  .badge.stealth { background:rgba(255,77,10,0.15); color:var(--accent); }
   .new-session-wrap { padding:12px 18px 0; }
   .btn-new { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; background:transparent; border:1px solid var(--accent); color:var(--accent); font-size:13px; font-weight:700; padding:11px; }
 
   .main { display:flex; flex-direction:column; flex-grow:1; min-width:0; }
+  .no-session-main { display:flex; align-items:center; justify-content:center; flex-grow:1; color:rgba(255,255,255,0.4); font-size:14px; }
   .session-header { display:flex; align-items:center; justify-content:space-between; padding:16px 24px 0; }
   .session-header .title { font-size:16px; font-weight:700; }
   .session-header .url { font-size:12.5px; color:rgba(255,255,255,0.45); font-family:'SF Mono',Consolas,monospace; }
@@ -67,22 +69,17 @@
   .log-time { color:rgba(255,255,255,0.35); font-family:'SF Mono',Consolas,monospace; flex-shrink:0; width:64px; }
   .log-tool { font-family:'SF Mono',Consolas,monospace; color:var(--accent); flex-shrink:0; }
   .log-detail { color:rgba(255,255,255,0.6); font-family:'SF Mono',Consolas,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .empty-note { font-size:12.5px; color:rgba(255,255,255,0.35); padding:8px 0; }
 
   .net-head { display:flex; gap:12px; padding:8px 0; font-size:10.5px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:rgba(255,255,255,0.4); }
-  .net-row { display:flex; gap:12px; align-items:center; padding:11px 0; border-bottom:1px solid rgba(255,255,255,0.06); font-size:12.5px; }
-  .net-method { width:50px; font-family:'SF Mono',Consolas,monospace; color:rgba(255,255,255,0.55); }
-  .net-status { width:46px; font-family:'SF Mono',Consolas,monospace; color:#3ddc84; }
-  .net-url { flex-grow:1; font-family:'SF Mono',Consolas,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:rgba(255,255,255,0.75); }
-  .btn-replay { width:80px; flex-shrink:0; background:transparent; border:1px solid rgba(255,255,255,0.18); color:#f5f4f1; font-size:11.5px; font-weight:600; padding:6px 0; }
   .net-note { margin-top:14px; font-size:12px; color:rgba(255,255,255,0.4); font-family:'SF Mono',Consolas,monospace; }
 
-  .state-dump { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); padding:16px; font-family:'SF Mono',Consolas,monospace; font-size:12.5px; line-height:1.7; color:rgba(255,255,255,0.75); white-space:pre-line; }
+  .state-dump { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); padding:16px; font-family:'SF Mono',Consolas,monospace; font-size:12.5px; line-height:1.7; color:rgba(255,255,255,0.75); white-space:pre-wrap; }
 
   .approval-banner { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:#0d0d0d; border-top:1px solid var(--accent); flex-shrink:0; }
   .approval-label { font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.4px; }
   .approval-reason { font-size:13px; color:rgba(255,255,255,0.75); }
   .btn-approve { background:var(--accent); border:1px solid var(--accent); color:#050505; font-size:12.5px; font-weight:700; padding:9px 16px; }
-  .btn-dismiss { background:transparent; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.7); font-size:12.5px; font-weight:600; padding:9px 16px; }
 
   .task-row { display:flex; gap:10px; padding:16px 24px; border-top:1px solid rgba(255,255,255,0.12); flex-shrink:0; }
   .task-input { flex-grow:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#f5f4f1; font-family:inherit; font-size:13.5px; padding:12px 14px; }
@@ -95,60 +92,209 @@
 <div id="app"></div>
 
 <script>
+const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:8787"
+  : "http://localhost:8787"; // same backend regardless of where the dashboard is served from
+
 const state = {
-  selectedId: "unsplash-search",
+  apiUp: null,
+  sessions: [],       // [{name, url}]
+  selectedId: null,
   activeTab: "activity",
   taskInput: "",
-  approvals: { "brightdata-test": true },
-  logs: {
-    "unsplash-search": [
-      { time: "14:02:10", tool: "browser_open", detail: "unsplash.com/s/photos/mountains" },
-      { time: "14:02:13", tool: "network_requests", detail: "2 JSON XHR captured" },
-      { time: "14:02:14", tool: "replay_request", detail: "phrase=desert -> 200, 1.86M results" },
-    ],
-    "brightdata-test": [
-      { time: "13:41:02", tool: "browser_open", detail: "amazon.com/s?k=running+shoes" },
-      { time: "13:41:05", tool: "get_state", detail: "834 interactive elements" },
-      { time: "13:42:40", tool: "request_human_help", detail: "site returned a soft block, needs a look" },
-    ],
-    "default": [
-      { time: "12:10:44", tool: "browser_open", detail: "example.com" },
-      { time: "12:10:45", tool: "click", detail: "index 1 -> iana.org/domains/example" },
-    ],
-  },
+  logs: {},            // sessionId -> [{time, tool, detail}]
+  jobs: {},            // sessionId -> {jobId, status, human_reason, pollTimer}
+  networkText: null,
+  stateText: null,
 };
 
-const sessionDefs = [
-  { id: "unsplash-search", name: "unsplash-search", url: "unsplash.com/s/photos/mountains", status: "idle", proxy: "webshare", stealth: true },
-  { id: "brightdata-test", name: "brightdata-test", url: "amazon.com/s?k=running+shoes", status: "needs you", proxy: "brightdata-isp", stealth: true },
-  { id: "default", name: "default", url: "example.com", status: "idle", proxy: "direct", stealth: false },
-];
-
-const networkLog = [
-  { method: "GET", status: "200", url: "unsplash.com/ngetty/v3/search/images/creative?phrase=mountains", replayDetail: "phrase=ocean -> 200, 11.1M results" },
-  { method: "POST", status: "200", url: "unsplash.com/nabc", replayDetail: "ad-decision endpoint, skipped" },
-];
-
-const stateDump = "url=https://unsplash.com/s/photos/mountains\ntitle=Unsplash\n\n[1]<a href=\"/\">\n[2]<input type=text placeholder=\"Search photos\">\n[3]<button> Search\n[4]<a href=\"/s/photos/nature\"> Nature\n[5]<a href=\"/s/photos/travel\"> Travel";
-
 function activeDef() {
-  return sessionDefs.find((d) => d.id === state.selectedId) ?? sessionDefs[0];
+  return state.sessions.find((s) => s.name === state.selectedId) ?? null;
 }
 
 function pushLog(id, tool, detail) {
   const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   if (!state.logs[id]) state.logs[id] = [];
   state.logs[id].push({ time, tool, detail });
-  state.activeTab = "activity";
+}
+
+async function api(path, options) {
+  const res = await fetch(API_BASE + path, options);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `request failed: ${res.status}`);
+  return body;
+}
+
+async function refreshSessions() {
+  const before = JSON.stringify(state.sessions) + state.apiUp;
+  try {
+    const data = await api("/sessions");
+    state.sessions = data.sessions;
+    state.apiUp = true;
+  } catch (e) {
+    state.apiUp = false;
+  }
+  const after = JSON.stringify(state.sessions) + state.apiUp;
+  if (before !== after) render();
+}
+
+async function checkHealth() {
+  try {
+    await api("/health");
+    state.apiUp = true;
+  } catch (e) {
+    state.apiUp = false;
+  }
+}
+
+async function createSession() {
+  const name = prompt("Session name (its own cookies/fingerprint, isolated from other sessions):", "session-" + Math.random().toString(36).slice(2, 6));
+  if (!name) return;
+  const url = prompt("URL to open:", "https://example.com");
+  if (!url) return;
+  pushLog(name, "browser_open", `opening ${url}…`);
+  state.selectedId = name;
   render();
+  try {
+    const res = await api(`/tools/browser_open`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url, session: name }),
+    });
+    pushLog(name, "browser_open", res.text.split("\n")[0]);
+  } catch (e) {
+    pushLog(name, "error", e.message);
+  }
+  await refreshSessions();
+}
+
+async function closeSession(id) {
+  try {
+    await api(`/tools/close_browser`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ session: id }),
+    });
+  } catch (e) {
+    pushLog(id, "error", e.message);
+  }
+  if (state.selectedId === id) state.selectedId = null;
+  await refreshSessions();
 }
 
 function sendTask() {
   const el = document.getElementById("task-input");
   const text = (el ? el.value : state.taskInput).trim();
-  if (!text) return;
+  if (!text || !state.selectedId) return;
   state.taskInput = "";
-  pushLog(state.selectedId, "task", text);
+  const sessionId = state.selectedId;
+  pushLog(sessionId, "task", text);
+  state.activeTab = "activity";
+  render();
+  runTask(sessionId, text);
+}
+
+async function runTask(sessionId, task) {
+  let job;
+  try {
+    job = await api("/tasks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ task, session: sessionId }),
+    });
+  } catch (e) {
+    pushLog(sessionId, "error", e.message);
+    render();
+    return;
+  }
+  state.jobs[sessionId] = { jobId: job.job_id, status: "running", human_reason: null, seenLogLength: 0 };
+  render();
+  pollJob(sessionId, job.job_id);
+}
+
+async function pollJob(sessionId, jobId) {
+  const jobState = state.jobs[sessionId];
+  if (!jobState || jobState.jobId !== jobId) return; // superseded by a newer task
+  let data;
+  try {
+    data = await api(`/tasks/${jobId}`);
+  } catch (e) {
+    pushLog(sessionId, "error", e.message);
+    delete state.jobs[sessionId];
+    render();
+    return;
+  }
+
+  for (let i = jobState.seenLogLength; i < data.log.length; i++) {
+    const entry = data.log[i];
+    if (entry.type === "tool_call") pushLog(sessionId, entry.name, JSON.stringify(entry.args));
+    else if (entry.type === "tool_result") pushLog(sessionId, `${entry.name} ->`, entry.text.split("\n")[0]);
+    else if (entry.type === "model") pushLog(sessionId, "agent", entry.text.split("\n")[0]);
+  }
+  jobState.seenLogLength = data.log.length;
+  jobState.status = data.status;
+  jobState.human_reason = data.human_reason;
+
+  if (data.status === "running") {
+    render();
+    setTimeout(() => pollJob(sessionId, jobId), 1200);
+  } else if (data.status === "needs_human") {
+    render();
+    setTimeout(() => pollJob(sessionId, jobId), 1500); // keep polling in case it's resumed elsewhere
+  } else if (data.status === "done") {
+    pushLog(sessionId, "done", (data.result || "").split("\n")[0] || "(no text result)");
+    delete state.jobs[sessionId];
+    render();
+  } else {
+    pushLog(sessionId, "error", data.error || "task failed");
+    delete state.jobs[sessionId];
+    render();
+  }
+}
+
+async function resumeJob(sessionId) {
+  const jobState = state.jobs[sessionId];
+  if (!jobState) return;
+  try {
+    await api(`/tasks/${jobState.jobId}/resume`, { method: "POST" });
+    pushLog(sessionId, "resumed", "human confirmed, agent continuing");
+  } catch (e) {
+    pushLog(sessionId, "error", e.message);
+  }
+  render();
+  pollJob(sessionId, jobState.jobId);
+}
+
+async function loadNetwork(sessionId) {
+  state.networkText = "loading…";
+  render();
+  try {
+    const res = await api("/tools/network_requests", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    state.networkText = res.text;
+  } catch (e) {
+    state.networkText = "error: " + e.message;
+  }
+  render();
+}
+
+async function loadState(sessionId) {
+  state.stateText = "loading…";
+  render();
+  try {
+    const res = await api("/tools/get_state", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ session: sessionId }),
+    });
+    state.stateText = res.text;
+  } catch (e) {
+    state.stateText = "error: " + e.message;
+  }
+  render();
 }
 
 function iconSettings() {
@@ -162,16 +308,22 @@ function iconMark() {
 }
 
 function render() {
-  const active = activeDef();
-  const humanNeeded = !!state.approvals[active.id];
-  const log = state.logs[state.selectedId] ?? [];
+  const prevInput = document.getElementById("task-input");
+  const hadFocus = prevInput && document.activeElement === prevInput;
+  const selectionStart = hadFocus ? prevInput.selectionStart : null;
 
-  const sessionsHtml = sessionDefs.map((d) => {
-    const selected = d.id === state.selectedId;
-    const status = state.approvals[d.id] ? "needs you" : d.status === "needs you" ? "idle" : d.status;
-    const dotColor = status === "needs you" ? "var(--accent)" : status === "idle" ? "#3ddc84" : "rgba(255,255,255,0.4)";
+  const active = activeDef();
+  const jobState = state.selectedId ? state.jobs[state.selectedId] : null;
+  const humanNeeded = jobState && jobState.status === "needs_human";
+  const log = state.selectedId ? (state.logs[state.selectedId] ?? []) : [];
+
+  const sessionsHtml = state.sessions.length ? state.sessions.map((d) => {
+    const selected = d.name === state.selectedId;
+    const j = state.jobs[d.name];
+    const status = j && j.status === "needs_human" ? "needs you" : j && j.status === "running" ? "running" : "idle";
+    const dotColor = status === "needs you" ? "var(--accent)" : status === "running" ? "#f5b24f" : "#3ddc84";
     return `
-      <div class="session-card ${selected ? "selected" : ""}" data-select="${d.id}">
+      <div class="session-card ${selected ? "selected" : ""}" data-select="${d.name}">
         <div class="session-row">
           <div class="session-name-group">
             <span class="dot" style="background:${dotColor}"></span>
@@ -179,13 +331,9 @@ function render() {
           </div>
           <span class="session-status" style="color:${dotColor}">${status}</span>
         </div>
-        <div class="session-url">${d.url}</div>
-        <div class="session-badges">
-          <span class="badge">${d.proxy}</span>
-          ${d.stealth ? '<span class="badge stealth">stealth</span>' : ""}
-        </div>
+        <div class="session-url">${d.url || "(no page loaded)"}</div>
       </div>`;
-  }).join("");
+  }).join("") : `<div class="session-empty">No sessions yet. Each session is its own isolated browser - cookies, fingerprint, everything separate.</div>`;
 
   const tabsHtml = ["activity", "network", "state"].map((t) => {
     const label = t[0].toUpperCase() + t.slice(1);
@@ -194,107 +342,110 @@ function render() {
 
   let tabContentHtml = "";
   if (state.activeTab === "activity") {
-    tabContentHtml = `<div>${log.map((e) => `
+    tabContentHtml = log.length ? `<div>${log.map((e) => `
       <div class="log-row">
         <span class="log-time">${e.time}</span>
         <span class="log-tool">${e.tool}</span>
         <span class="log-detail">${e.detail}</span>
-      </div>`).join("")}</div>`;
+      </div>`).join("")}</div>` : `<div class="empty-note">No activity yet on this session.</div>`;
   } else if (state.activeTab === "network") {
     tabContentHtml = `
-      <div class="net-head"><span style="width:50px">Method</span><span style="width:46px">Status</span><span style="flex-grow:1">URL</span><span style="width:80px"></span></div>
-      ${networkLog.map((r, i) => `
-        <div class="net-row">
-          <span class="net-method">${r.method}</span>
-          <span class="net-status">${r.status}</span>
-          <span class="net-url">${r.url}</span>
-          <button class="btn-replay" data-replay="${i}">Replay</button>
-        </div>`).join("")}
-      <div class="net-note">real capture, 2026-08-26 · unsplash.com/s/photos/mountains</div>`;
+      <button class="btn-ghost" id="load-network">Fetch real network log</button>
+      <div class="state-dump" style="margin-top:14px">${state.networkText ? escapeHtml(state.networkText) : "(not loaded - click above to fetch this session's captured XHR/fetch log)"}</div>`;
   } else {
-    tabContentHtml = `<div class="state-dump">${stateDump}</div>`;
+    tabContentHtml = `
+      <button class="btn-ghost" id="load-state">Fetch real page state</button>
+      <div class="state-dump" style="margin-top:14px">${state.stateText ? escapeHtml(state.stateText) : "(not loaded - click above to fetch this session's current interactive-element list)"}</div>`;
   }
 
   const approvalHtml = humanNeeded ? `
     <div class="approval-banner">
       <div>
         <div class="approval-label">Approval needed</div>
-        <div class="approval-reason">Amazon returned a soft block (HTTP 503) on this proxy identity - rotate or take over.</div>
+        <div class="approval-reason">${escapeHtml(jobState.human_reason || "The agent asked for a human to take over this step.")}</div>
       </div>
       <div style="display:flex; gap:8px;">
-        <button class="btn-dismiss" id="dismiss-approval">Dismiss</button>
-        <button class="btn-approve" id="approve-approval">Take over &amp; continue</button>
+        <button class="btn-approve" id="approve-approval">I've handled it — continue</button>
       </div>
     </div>` : "";
+
+  const mainHtml = active ? `
+    <div class="session-header">
+      <div><div class="title">${active.name}</div><div class="url">${active.url || "(no page loaded)"}</div></div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        ${jobState && jobState.status === "running" ? '<div class="needs-you" style="color:#f5b24f"><span class="dot" style="background:#f5b24f"></span> Running</div>' : ""}
+        ${humanNeeded ? '<div class="needs-you"><span class="dot"></span> Needs you</div>' : ""}
+        <button class="btn-ghost" id="close-session">Close session</button>
+      </div>
+    </div>
+    <div class="tabs">${tabsHtml}</div>
+    <div class="tab-content">${tabContentHtml}</div>
+    ${approvalHtml}
+    <div class="task-row">
+      <input class="task-input" id="task-input" placeholder="Tell the agent what to do…" value="${escapeAttr(state.taskInput)}" ${jobState && jobState.status === "running" ? "disabled" : ""}>
+      <button class="btn-send" id="send-task" ${jobState && jobState.status === "running" ? "disabled" : ""}>Send</button>
+    </div>` : `<div class="no-session-main">Select or create a session to start.</div>`;
 
   document.getElementById("app").innerHTML = `
     <div class="topbar">
       <div class="brand">
         <div class="mark">${iconMark()}</div>
-        <div class="wordmark"><span class="name">AX SCRAPER</span><span class="sub">by Alter Engine</span></div>
+        <div class="wordmark"><span class="name">AX SCRAPER</span><span class="sub">by AlterX</span></div>
       </div>
       <div class="topbar-right">
-        <div class="status-dot-row"><span class="status-dot"></span>browser-mcp · ap-south-1 · live</div>
+        <div class="status-dot-row"><span class="status-dot ${state.apiUp ? "up" : "down"}"></span>${state.apiUp === null ? "checking…" : state.apiUp ? "backend live · localhost:8787" : "backend unreachable"}</div>
         <button class="btn-ghost">${iconSettings()} Settings</button>
       </div>
     </div>
     <div class="body">
       <div class="sidebar">
-        <div class="sidebar-head"><span class="sidebar-label">Sessions</span><span class="sidebar-count">${sessionDefs.length} total</span></div>
+        <div class="sidebar-head"><span class="sidebar-label">Sessions</span><span class="sidebar-count">${state.sessions.length} total</span></div>
         <div class="session-list">${sessionsHtml}</div>
         <div class="new-session-wrap"><button class="btn-new" id="new-session">${iconPlus()} New session</button></div>
       </div>
-      <div class="main">
-        <div class="session-header">
-          <div><div class="title">${active.name}</div><div class="url">${active.url}</div></div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            ${humanNeeded ? '<div class="needs-you"><span class="dot"></span> Needs you</div>' : ""}
-            <button class="btn-ghost" id="close-session">Close session</button>
-          </div>
-        </div>
-        <div class="tabs">${tabsHtml}</div>
-        <div class="tab-content">${tabContentHtml}</div>
-        ${approvalHtml}
-        <div class="task-row">
-          <input class="task-input" id="task-input" placeholder="Tell the agent what to do next…" value="${state.taskInput}">
-          <button class="btn-send" id="send-task">Send</button>
-        </div>
-      </div>
+      <div class="main">${mainHtml}</div>
     </div>
   `;
 
   document.querySelectorAll("[data-select]").forEach((el) => {
-    el.addEventListener("click", () => { state.selectedId = el.dataset.select; render(); });
+    el.addEventListener("click", () => { state.selectedId = el.dataset.select; state.networkText = null; state.stateText = null; render(); });
   });
   document.querySelectorAll("[data-tab]").forEach((el) => {
     el.addEventListener("click", () => { state.activeTab = el.dataset.tab; render(); });
   });
-  document.querySelectorAll("[data-replay]").forEach((el) => {
-    el.addEventListener("click", () => {
-      const r = networkLog[Number(el.dataset.replay)];
-      pushLog(state.selectedId, "replay_request", r.replayDetail);
-    });
-  });
   const newBtn = document.getElementById("new-session");
-  if (newBtn) newBtn.addEventListener("click", () => pushLog(state.selectedId, "browser_open", "new session started"));
+  if (newBtn) newBtn.addEventListener("click", createSession);
   const closeBtn = document.getElementById("close-session");
-  if (closeBtn) closeBtn.addEventListener("click", () => pushLog(state.selectedId, "close_browser", active.id));
-  const dismissBtn = document.getElementById("dismiss-approval");
-  if (dismissBtn) dismissBtn.addEventListener("click", () => { state.approvals[active.id] = false; render(); });
+  if (closeBtn) closeBtn.addEventListener("click", () => closeSession(active.name));
   const approveBtn = document.getElementById("approve-approval");
-  if (approveBtn) approveBtn.addEventListener("click", () => { state.approvals[active.id] = false; render(); });
+  if (approveBtn) approveBtn.addEventListener("click", () => resumeJob(state.selectedId));
+  const loadNetBtn = document.getElementById("load-network");
+  if (loadNetBtn) loadNetBtn.addEventListener("click", () => loadNetwork(state.selectedId));
+  const loadStateBtn = document.getElementById("load-state");
+  if (loadStateBtn) loadStateBtn.addEventListener("click", () => loadState(state.selectedId));
   const taskInput = document.getElementById("task-input");
   if (taskInput) {
     taskInput.addEventListener("input", (e) => { state.taskInput = e.target.value; });
     taskInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendTask(); });
-    taskInput.focus();
-    taskInput.setSelectionRange(state.taskInput.length, state.taskInput.length);
+    if (hadFocus) {
+      taskInput.focus();
+      taskInput.setSelectionRange(selectionStart, selectionStart);
+    }
   }
   const sendBtn = document.getElementById("send-task");
   if (sendBtn) sendBtn.addEventListener("click", sendTask);
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/"/g, "&quot;");
+}
+
 render();
+checkHealth().then(refreshSessions);
+setInterval(refreshSessions, 5000);
 </script>
 </body>
 </html>

@@ -3,13 +3,27 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+import re
 import string
+from pathlib import Path
 
 # patchright, not playwright: same API, but patches the CDP-level tells
 # (navigator.webdriver, iframe/runtime leaks) that anti-bot scripts check
 # first. Verified: vanilla playwright reports navigator.webdriver=True,
 # patchright reports False. Drop-in - nothing else in this file changed.
-from patchright.async_api import Browser, Page, Playwright, Route, async_playwright
+from patchright.async_api import Browser, BrowserContext, Page, Playwright, Route, async_playwright
+
+PROFILES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "profiles"
+
+
+def _profile_dir(session_name: str) -> str:
+    """A stable on-disk profile per persistent session name, so cookies/
+    localStorage/login state survive process restarts - real "signed-in
+    session" persistence, not just a same-process reuse."""
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", session_name)
+    path = PROFILES_DIR / safe_name
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 _BLOCKED_RESOURCE_TYPES = {"image", "media", "font"}
 
@@ -50,7 +64,11 @@ _TRACKER_DOMAINS = (
 
 
 def _block_media_enabled() -> bool:
-    return os.environ.get("BLOCK_MEDIA", "1") not in ("0", "false", "False")
+    """Defaults OFF now. Blocking images measured only 8-11% bandwidth savings
+    on real pages (JS bundles dominate, not images), and it makes every live
+    screenshot render with holes where the content should be - a bad trade
+    once you actually watch runs happen. Set BLOCK_MEDIA=1 to bring it back."""
+    return os.environ.get("BLOCK_MEDIA", "0") not in ("0", "false", "False")
 
 
 def _block_trackers_enabled() -> bool:
@@ -72,7 +90,23 @@ async def _block_route(route: Route) -> None:
     await route.continue_()
 
 
+# Runtime override for headless mode, set by the console's toggle. None means
+# "use the HEADLESS env var". A live toggle matters because the choice is a
+# preference that changes hour to hour - watch the window while debugging a
+# selector, hide it while a long harvest runs in the background - and
+# restarting the server to flip an env var loses every open session.
+_headless_override: bool | None = None
+
+
+def set_headless(value: bool | None) -> None:
+    """Applies to browsers launched from now on; already-open ones keep their mode."""
+    global _headless_override
+    _headless_override = value
+
+
 def _headless_enabled() -> bool:
+    if _headless_override is not None:
+        return _headless_override
     return os.environ.get("HEADLESS", "0") in ("1", "true", "True")
 
 
@@ -137,11 +171,15 @@ class BrowserSession:
     outright, not something to find out at deploy time.
     """
 
-    def __init__(self, playwright: Playwright) -> None:
+    def __init__(self, playwright: Playwright, name: str, persistent: bool = False) -> None:
         self._playwright = playwright
+        self._name = name
+        self.persistent = persistent
         self._browser: Browser | None = None
+        self._context: BrowserContext | None = None
         self._page: Page | None = None
         self._lock = asyncio.Lock()
+        self._closing = False
         self.network_log: list[dict] = []
 
     async def _record_response(self, response) -> None:
@@ -166,24 +204,65 @@ class BrowserSession:
     async def ensure_page(self) -> Page:
         async with self._lock:
             if self._page is None or self._page.is_closed():
-                if self._browser is None or not self._browser.is_connected():
-                    self._browser = await self._playwright.chromium.launch(
-                        headless=_headless_enabled(),
-                        proxy=_proxy_config(),
-                        args=_extra_launch_args(),
-                    )
-                self._page = await self._browser.new_page()
+                if self.persistent:
+                    if self._context is None:
+                        self._context = await self._playwright.chromium.launch_persistent_context(
+                            _profile_dir(self._name),
+                            headless=_headless_enabled(),
+                            proxy=_proxy_config(),
+                            args=_extra_launch_args(),
+                        )
+                    self._page = self._context.pages[0] if self._context.pages else await self._context.new_page()
+                else:
+                    if self._browser is None or not self._browser.is_connected():
+                        self._browser = await self._playwright.chromium.launch(
+                            headless=_headless_enabled(),
+                            proxy=_proxy_config(),
+                            args=_extra_launch_args(),
+                        )
+                    self._page = await self._browser.new_page()
                 if _block_media_enabled() or _block_trackers_enabled():
                     await self._page.route("**/*", _block_route)
                 self._page.on("response", lambda r: asyncio.create_task(self._record_response(r)))
+                # Closing the window with its own X button ends the page but
+                # leaves Playwright's browser process running, so the session
+                # became a zombie: no window, process still resident, still
+                # listed in the UI, and the next run silently reopened inside
+                # it. Measured: 7 Chromium processes survived a manual close.
+                # Treat the user shutting the window as shutting the session.
+                self._page.on("close", lambda _: asyncio.create_task(self._on_window_closed()))
             return self._page
+
+    async def _on_window_closed(self) -> None:
+        """Reap this session when its last window is closed by hand."""
+        if self._closing:
+            return  # our own close() is already tearing it down
+        try:
+            if self._context is not None and self._context.pages:
+                return  # other tabs still open in a persistent context
+        except Exception:  # noqa: BLE001 - context already gone
+            pass
+        await manager.close(self._name)
 
     async def close(self) -> None:
         async with self._lock:
-            if self._browser is not None:
-                await self._browser.close()
-                self._browser = None
-            self._page = None
+            self._closing = True
+            try:
+                if self._context is not None:
+                    await self._context.close()
+                    self._context = None
+                if self._browser is not None:
+                    await self._browser.close()
+                    self._browser = None
+                self._page = None
+            finally:
+                self._closing = False
+
+    @property
+    def current_url(self) -> str | None:
+        if self._page is None or self._page.is_closed():
+            return None
+        return self._page.url
 
 
 class SessionManager:
@@ -206,11 +285,16 @@ class SessionManager:
                 self._playwright = await async_playwright().start()
             return self._playwright
 
-    async def get(self, name: str) -> BrowserSession:
+    async def get(self, name: str, persistent: bool = False) -> BrowserSession:
+        """`persistent` only takes effect the first time `name` is created -
+        an already-open session keeps whatever mode it started with."""
         if name not in self._sessions:
             playwright = await self._ensure_playwright()
-            self._sessions[name] = BrowserSession(playwright)
+            self._sessions[name] = BrowserSession(playwright, name, persistent=persistent)
         return self._sessions[name]
+
+    def list_sessions(self) -> list[str]:
+        return list(self._sessions.keys())
 
     async def close(self, name: str) -> bool:
         session = self._sessions.pop(name, None)

@@ -9,10 +9,17 @@ MCP server - just made explicit and pointed at Bedrock instead.
 Usage:
     .venv/bin/python scripts/bedrock_agent.py "go to news.ycombinator.com and tell me the top story title"
 
-Model defaults to Mistral Large, not Claude - this AWS account's Anthropic
-Marketplace subscription currently rejects calls with INVALID_PAYMENT_INSTRUMENT
-(confirmed live, every Anthropic model on Bedrock affected, non-Anthropic
-models unaffected). Once that's fixed in the AWS console, switch back with
+Model defaults to Amazon Nova Pro, not Claude - this AWS account's Anthropic
+Marketplace subscription still rejects calls with INVALID_PAYMENT_INSTRUMENT
+(re-confirmed live), non-Anthropic models unaffected. Nova replaced an
+earlier Mistral Large default - Mistral frequently narrated a tool call as
+prose instead of actually invoking it (confirmed via direct comparison on
+the same task); Nova reliably emits real toolUse blocks and completed a real
+multi-step Amazon scrape end to end in testing. Its own weak spot: it can
+fabricate a plausible-looking value for a field it never actually extracted
+rather than omitting it, so structured output still needs a skeptical read,
+not blind trust. Once the Marketplace billing issue is fixed in the AWS
+console, switch to Claude with
 BEDROCK_MODEL_ID=apac.anthropic.claude-3-7-sonnet-20250219-v1:0 (or newer, if
 enabled) - the tool-use loop below doesn't care which model it's talking to.
 """
@@ -26,7 +33,7 @@ import boto3
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-DEFAULT_MODEL_ID = "mistral.mistral-large-2402-v1:0"
+DEFAULT_MODEL_ID = "apac.amazon.nova-pro-v1:0"
 MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", DEFAULT_MODEL_ID)
 REGION = os.environ.get("AWS_REGION", "ap-south-1")
 MAX_STEPS = 15
