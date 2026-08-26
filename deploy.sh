@@ -16,6 +16,9 @@
 # Data (agents, run history, signed-in browser profiles) lives in a named
 # volume so a rebuild does not wipe it.
 #
+# Caddy fronts the API and terminates TLS; the app container publishes no port
+# of its own, so the plain-HTTP endpoint is not reachable from the internet.
+#
 # Usage: ./deploy.sh
 set -euo pipefail
 
@@ -37,13 +40,14 @@ ssh -i "$KEY" "$HOST" '
 
   cd browser-mcp
   git pull --ff-only
-  sudo docker build -t browser-mcp:latest .
+
+  # The old single-container deploy published 8000 directly; compose puts
+  # Caddy in front and keeps the app off the public interface.
   sudo docker rm -f browser-mcp 2>/dev/null || true
-  sudo docker run -d --name browser-mcp --restart unless-stopped \
-    -p 8000:8000 \
-    -v ax-scraper-data:/data \
-    --env-file ~/.ax-scraper-env \
-    browser-mcp:latest
-  sleep 3
-  sudo docker logs --tail 8 browser-mcp
+
+  sudo docker volume create ax-scraper-data >/dev/null
+  sudo docker compose up -d --build
+  sleep 5
+  sudo docker compose ps
+  sudo docker compose logs --tail 6 app
 '

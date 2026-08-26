@@ -1,0 +1,27 @@
+# TLS terminator in front of the API container.
+#
+# The backend speaks plain HTTP, which is fine on a private network but not
+# across the internet: the API token travels in an Authorization header, and
+# without TLS anyone on the path can read it. Caddy obtains and renews a real
+# Let's Encrypt certificate automatically.
+#
+# The hostname is an nip.io address, which resolves to this box's IP with no
+# DNS setup. Swap it for a real subdomain (say scraper.alterx.co.in, pointed
+# here with an A record) by changing this one line - nothing else needs to
+# know the difference.
+13-206-203-227.nip.io {
+	# `app` is the API container on the shared Docker network. Addressing it
+	# by name rather than by published port keeps the backend off the public
+	# interface entirely once port 8000 is closed.
+	reverse_proxy app:8000
+
+	# Screenshots and extracted records can be large; the default buffer would
+	# force them through memory for no benefit.
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+}

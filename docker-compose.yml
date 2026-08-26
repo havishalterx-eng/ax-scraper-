@@ -1,0 +1,34 @@
+# Runs the API behind Caddy, which terminates TLS.
+#
+# The API deliberately publishes no port of its own: it is reachable only
+# through Caddy on the internal network, so the plain-HTTP endpoint cannot be
+# hit directly from the internet.
+services:
+  app:
+    image: browser-mcp:latest
+    build: .
+    restart: unless-stopped
+    env_file: ~/.ax-scraper-env
+    volumes:
+      - ax-scraper-data:/data
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  ax-scraper-data:
+    external: true
+  caddy-data:
+  caddy-config:
