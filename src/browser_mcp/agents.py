@@ -16,12 +16,25 @@ used for the blocking boto3 Bedrock call in api.py.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import time
 import uuid
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "browser-mcp.db"
+def data_dir() -> Path:
+    """Where persistent state lives.
+
+    Overridable via AX_DATA_DIR so a container can mount a volume over it -
+    without that, a redeploy replaces the image and every saved agent, run and
+    login profile goes with it. Not derived from `__file__`, which resolves
+    inside site-packages under this project's non-editable install.
+    """
+    override = os.environ.get("AX_DATA_DIR")
+    return Path(override) if override else Path.cwd() / "data"
+
+
+DB_PATH = data_dir() / "browser-mcp.db"
 
 
 def _conn() -> sqlite3.Connection:

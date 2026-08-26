@@ -1,3 +1,13 @@
+# Build the console first, in a Node image, and copy only its output into the
+# runtime image. Keeping Node out of the final layer avoids shipping a whole
+# toolchain to run a directory of static files.
+FROM node:22-slim AS console
+WORKDIR /console
+COPY console/package.json console/package-lock.json ./
+RUN npm ci --silent
+COPY console/ ./
+RUN npm run build
+
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -19,6 +29,8 @@ RUN uv sync --no-editable
 # Playwright does, no need to hand-list apt packages ourselves.
 RUN .venv/bin/python -m patchright install --with-deps chromium
 
+COPY --from=console /console/dist ./console/dist
+
 # A container has no display - headed mode (this project's local default,
 # so you can watch it work) would crash the launch outright here.
 ENV HEADLESS=1
@@ -28,9 +40,17 @@ ENV HEADLESS=1
 # the one-line fix and doesn't depend on the host's Docker config.
 ENV BROWSER_MCP_EXTRA_ARGS="--disable-dev-shm-usage"
 
-ENV MCP_TRANSPORT=streamable-http
+# Agents, runs and browser profiles live here. Mount a volume over it so they
+# survive a redeploy - a rebuild replaces the image, and anything written
+# inside the container goes with it.
+ENV AX_DATA_DIR=/data
+VOLUME ["/data"]
+
 ENV HOST=0.0.0.0
-ENV PORT=8000
+ENV API_PORT=8000
 EXPOSE 8000
 
-CMD [".venv/bin/browser-mcp"]
+# Serves the HTTP API and the console together. AX_API_TOKEN must be supplied
+# at run time; without it the API is unauthenticated, which is not acceptable
+# on a public host.
+CMD [".venv/bin/browser-mcp-api"]

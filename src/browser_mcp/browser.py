@@ -13,7 +13,15 @@ from pathlib import Path
 # patchright reports False. Drop-in - nothing else in this file changed.
 from patchright.async_api import Browser, BrowserContext, Page, Playwright, Route, async_playwright
 
-PROFILES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "profiles"
+def _profiles_root() -> Path:
+    """Signed-in browser profiles. Shares AX_DATA_DIR with the database so a
+    single mounted volume keeps both logins and run history across redeploys."""
+    override = os.environ.get("AX_DATA_DIR")
+    base = Path(override) if override else Path.cwd() / "data"
+    return base / "profiles"
+
+
+PROFILES_DIR = _profiles_root()
 
 
 def _profile_dir(session_name: str) -> str:
