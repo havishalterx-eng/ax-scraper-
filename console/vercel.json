@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "http://13.206.203.227:8000/:path*"
+      "destination": "https://13-206-203-227.nip.io/:path*"
     },
     {
       "source": "/((?!assets/|favicon|icons).*)",
