@@ -1,0 +1,51 @@
+.gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse 700px 380px at 50% -10%, rgba(255,77,10,0.18), transparent 62%),
+    var(--ax-black);
+}
+
+.gate-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--ax-black-elevated);
+  border: 1px solid var(--ax-border-dark);
+  border-radius: var(--radius-panel);
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 30px 70px -30px rgba(0,0,0,0.85);
+}
+
+.gate-brand { display: flex; align-items: center; gap: 12px; }
+.gate-name { font-size: 16px; font-weight: 700; color: var(--ax-off-white); letter-spacing: -0.01em; }
+.gate-sub { font-size: 10px; font-weight: 500; color: var(--ax-muted-dark); letter-spacing: 0.08em; text-transform: uppercase; }
+
+.gate-copy { font-size: 13px; line-height: 1.6; color: var(--ax-muted-dark); }
+.gate-copy code {
+  background: rgba(255,255,255,0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: var(--ax-off-white);
+}
+
+.gate-input { font-size: 14px; padding: 12px 14px; }
+.gate-submit { width: 100%; padding: 12px; }
+
+.gate-error {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ax-danger);
+  background: rgba(255,116,121,0.08);
+  border: 1px solid rgba(255,116,121,0.3);
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+}
+
+.gate-note { font-size: 11.5px; color: rgba(251,250,247,0.42); line-height: 1.55; }

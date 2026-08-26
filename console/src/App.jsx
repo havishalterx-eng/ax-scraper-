@@ -7,7 +7,8 @@ import TemplatesView from './components/TemplatesView.jsx';
 import HomeView from './components/HomeView.jsx';
 import { ProxiesView, DeliveryView } from './components/InfraViews.jsx';
 import { HistoryView, SessionsView } from './components/SimpleViews.jsx';
-import { getHealth, listTasks, setHeadless } from './api.js';
+import TokenGate, { checkAuth } from './components/TokenGate.jsx';
+import { API_BASE, UnauthorizedError, getHealth, listTasks, setHeadless } from './api.js';
 
 export default function App() {
   const [view, setView] = useState('home');
@@ -15,8 +16,17 @@ export default function App() {
   const [session, setSession] = useState('');
   const [tasks, setTasks] = useState([]);
   const [health, setHealth] = useState(null);
+  // null = still probing; the gate must not flash before we know.
+  const [needsToken, setNeedsToken] = useState(null);
 
   useEffect(() => {
+    let stop = false;
+    checkAuth(API_BASE).then((r) => { if (!stop) setNeedsToken(r.needsToken); });
+    return () => { stop = true; };
+  }, []);
+
+  useEffect(() => {
+    if (needsToken !== false) return;
     let stop = false;
     const tick = async () => {
       try {
@@ -28,14 +38,23 @@ export default function App() {
       try {
         const { tasks: list } = await listTasks();
         if (!stop) setTasks(list);
-      } catch { /* the sidebar footer already reports the outage */ }
+      } catch (err) {
+        // A token revoked or rotated server-side shows up here first; send the
+        // user back to the gate rather than leaving a silently dead console.
+        if (err instanceof UnauthorizedError && !stop) setNeedsToken(true);
+      }
     };
     tick();
     const t = setInterval(tick, 4000);
     return () => { stop = true; clearInterval(t); };
-  }, []);
+  }, [needsToken]);
 
   const openJob = (id) => { setJobId(id); setView('run'); };
+
+  if (needsToken === null) return <div className="app" />;
+  if (needsToken) {
+    return <TokenGate apiBase={API_BASE} onAuthorised={() => setNeedsToken(false)} />;
+  }
 
   return (
     <div className="app">

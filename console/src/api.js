@@ -13,9 +13,42 @@ export const API_BASE =
   import.meta.env.VITE_API_BASE ??
   (DEV_PORTS.has(window.location.port) ? 'http://localhost:8787' : '');
 
+/**
+ * Shared API token.
+ *
+ * Kept in localStorage so a phone doesn't have to be re-authorised every time
+ * the tab is reopened. This is a single-operator secret, not a session: there
+ * is no per-user identity behind it and it should not be treated as one.
+ */
+const TOKEN_KEY = 'ax-scraper-token';
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY) ?? '';
+export const setToken = (value) => {
+  if (value) localStorage.setItem(TOKEN_KEY, value);
+  else localStorage.removeItem(TOKEN_KEY);
+};
+
+/** Thrown on 401 so the UI can show the token prompt instead of a raw error. */
+export class UnauthorizedError extends Error {
+  constructor(message) {
+    super(message || 'Unauthorized');
+    this.name = 'UnauthorizedError';
+  }
+}
+
+function withAuth(options = {}) {
+  const token = getToken();
+  if (!token) return options;
+  return {
+    ...options,
+    headers: { ...(options.headers ?? {}), Authorization: `Bearer ${token}` },
+  };
+}
+
 async function req(path, options) {
-  const res = await fetch(`${API_BASE}${path}`, options);
+  const res = await fetch(`${API_BASE}${path}`, withAuth(options));
   const body = await res.json().catch(() => ({}));
+  if (res.status === 401) throw new UnauthorizedError(body.error);
   if (!res.ok) throw new Error(body.error || `${res.status} ${res.statusText}`);
   return body;
 }

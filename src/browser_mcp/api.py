@@ -44,6 +44,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.routing import Route
 
 from . import agents as agent_store
+from .auth import TokenAuthMiddleware, auth_enabled
 from .browser import _headless_enabled, manager, set_headless
 from . import templates as template_store
 from .extract import take_extraction
@@ -892,6 +893,7 @@ async def health(request: Request) -> JSONResponse:
             "region": REGION,
             "max_steps": MAX_STEPS,
             "headless": _headless_enabled(),
+            "auth_required": auth_enabled(),
             "live_sessions": len(manager.list_sessions()),
         }
     )
@@ -1083,6 +1085,7 @@ app = Starlette(
         Middleware(
             CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
         ),
+        Middleware(TokenAuthMiddleware),
     ],
     lifespan=_lifespan,
 )
