@@ -128,8 +128,20 @@ ran a real `browser_open` through it - not just "the process starts."
 
 No auth wired in yet - fine for now since nothing is deployed anywhere
 network-reachable, but a real requirement before actually exposing this on
-a cloud host (Fly.io is the current plan - cost and Chromium-in-container
-notes saved to project memory).
+a cloud host.
+
+**Cloud deployment - live.** Running on AWS Lightsail (not Fly.io - Fly's
+account got locked behind a payment-method gate, Lightsail already had
+billing set up on this AWS account, zero new signup friction). Private-only:
+firewall has only SSH open, port 8000 is not publicly reachable - confirmed
+via a direct connection attempt from outside (timeout, not even a refusal).
+Real access is through an SSH tunnel (`ssh -L 8940:localhost:8000 ...`),
+verified end to end with a real MCP client and a real `browser_open` call.
+
+Redeploying: the box holds a real `git clone` of this repo (public, no
+auth needed), so updates are `./deploy.sh` - pulls the new commit, rebuilds,
+restarts the container. Replaces what used to be a manual tar/scp/build
+cycle.
 
 **Not built yet (later phases):**
 
