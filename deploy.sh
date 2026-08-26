@@ -45,6 +45,10 @@ ssh -i "$KEY" "$HOST" '
   # Caddy in front and keeps the app off the public interface.
   sudo docker rm -f browser-mcp 2>/dev/null || true
 
+  # compose reads env_file relative to the project dir, and runs as root, so
+  # the secrets file is linked in rather than referenced through ~.
+  ln -sf ~/.ax-scraper-env ./.ax-scraper-env
+
   sudo docker volume create ax-scraper-data >/dev/null
   sudo docker compose up -d --build
   sleep 5

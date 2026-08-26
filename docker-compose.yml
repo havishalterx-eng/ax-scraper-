@@ -8,7 +8,9 @@ services:
     image: browser-mcp:latest
     build: .
     restart: unless-stopped
-    env_file: ~/.ax-scraper-env
+    # Relative, not ~: compose runs under sudo, where ~ is /root rather than
+    # the login user's home. deploy.sh links this to the real secrets file.
+    env_file: ./.ax-scraper-env
     volumes:
       - ax-scraper-data:/data
     expose:

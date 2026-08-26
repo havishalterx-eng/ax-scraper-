@@ -7,3 +7,4 @@ data/
 *.env
 console/node_modules/
 console/dist/
+.ax-scraper-env
