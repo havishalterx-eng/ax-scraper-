@@ -31,6 +31,7 @@ import os
 import re
 import time
 import uuid
+from pathlib import Path
 
 import boto3
 import httpx
@@ -39,6 +40,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.staticfiles import StaticFiles
 from starlette.routing import Route
 
 from . import agents as agent_store
@@ -1000,6 +1002,48 @@ async def set_config(request: Request) -> JSONResponse:
     )
 
 
+# The built console, served by this same process when it exists.
+#
+# One process serving both the API and the UI is what makes this reachable
+# from a phone as a single URL, and it removes CORS from the picture entirely
+# since the page and its API share an origin. Absent in a dev checkout (the
+# console runs on Vite then), so its absence is normal, not an error.
+def _console_dist() -> Path | None:
+    """Locate the built console.
+
+    Deliberately not derived from `__file__`: this package is installed
+    non-editable, so `__file__` lives in site-packages and walking up from it
+    lands inside the virtualenv rather than the checkout. Resolve from the
+    working directory instead, with an env override for deployments that put
+    the bundle elsewhere.
+    """
+    override = os.environ.get("CONSOLE_DIST")
+    candidates = [Path(override)] if override else []
+    candidates += [Path.cwd() / "console" / "dist", Path.cwd() / "dist"]
+    for candidate in candidates:
+        if candidate.is_dir() and (candidate / "index.html").is_file():
+            return candidate
+    return None
+
+
+CONSOLE_DIST = _console_dist()
+
+
+class ConsoleFiles(StaticFiles):
+    """Serves the console SPA, falling back to index.html for unknown paths.
+
+    A single-page app owns its own routing, so a deep link must return the
+    app shell rather than a 404 - but only for paths the API itself does not
+    claim, which Starlette guarantees by matching this mount last.
+    """
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 404:
+            return await super().get_response("index.html", scope)
+        return response
+
+
 @contextlib.asynccontextmanager
 async def _lifespan(app: Starlette):
     await asyncio.to_thread(agent_store.init_db)
@@ -1042,6 +1086,9 @@ app = Starlette(
     ],
     lifespan=_lifespan,
 )
+
+if CONSOLE_DIST is not None:
+    app.mount("/", ConsoleFiles(directory=str(CONSOLE_DIST), html=True), name="console")
 
 
 def main() -> None:

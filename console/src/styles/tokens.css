@@ -1,0 +1,45 @@
+:root {
+  --ax-black: #090909;
+  --ax-black-soft: #141414;
+  --ax-off-white: #FBFAF7;
+  --ax-orange: #FF4D0A;
+  --ax-orange-deep: #C9360A;
+  --ax-orange-warm: #F97316;
+  --ax-muted-dark: rgba(251, 250, 247, 0.64);
+  --ax-muted-light: rgba(9, 9, 9, 0.62);
+  --ax-border-dark: rgba(255, 255, 255, 0.12);
+  --ax-border-light: rgba(9, 9, 9, 0.12);
+  --ax-success: #70D9A6;
+  --ax-warning: #F5B24F;
+  --ax-danger: #FF7479;
+
+  --ax-black-elevated: #1B1B1B;
+  --ax-black-line: rgba(255, 255, 255, 0.07);
+  --ax-white-line: rgba(9, 9, 9, 0.07);
+  --ax-off-white-soft: #F1EFE9;
+
+  --font-sans: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'SF Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  --radius-panel: 20px;
+  --radius-card: 15px;
+  --radius-control: 11px;
+  --radius-pill: 999px;
+
+  --content-max: 1440px;
+  --pad-desktop: 56px;
+  --pad-tablet: 32px;
+  --pad-mobile: 20px;
+
+  --dur-fast: 0.18s;
+  --dur-med: 0.4s;
+  --dur-slow: 0.9s;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (max-width: 1024px) {
+  :root { --pad-desktop: 32px; }
+}
+@media (max-width: 480px) {
+  :root { --pad-desktop: 20px; }
+}

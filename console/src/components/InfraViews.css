@@ -1,0 +1,56 @@
+.infra-view { height: 100%; overflow-y: auto; min-height: 0; padding: 26px 28px 40px; }
+
+.infra-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+.infra-h1 { font-size: 28px; font-weight: 700; color: var(--ax-off-white); }
+.infra-hint { font-size: 12.5px; color: var(--ax-muted-dark); margin-top: 6px; }
+
+.infra-error {
+  background: rgba(255,116,121,0.08);
+  border: 1px solid rgba(255,116,121,0.3);
+  border-radius: var(--radius-control);
+  color: var(--ax-danger);
+  font-size: 12.5px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.infra-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+
+.infra-card {
+  background: var(--ax-black-soft);
+  border: 1px solid var(--ax-border-dark);
+  border-radius: var(--radius-panel);
+  padding: 18px;
+}
+.infra-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.infra-card-title { font-size: 15px; font-weight: 700; color: var(--ax-off-white); }
+
+.infra-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ax-black-line);
+  font-size: 12.5px;
+}
+.infra-row-label { color: var(--ax-muted-dark); }
+.infra-row-value { color: var(--ax-off-white); font-weight: 600; word-break: break-all; text-align: right; }
+.infra-row-value.is-muted { color: var(--ax-muted-dark); font-weight: 500; }
+.infra-row-value.is-warn { color: var(--ax-warning); }
+
+.infra-note { font-size: 12px; line-height: 1.65; color: var(--ax-muted-dark); margin-top: 12px; }
+.infra-note-dim { color: rgba(251,250,247,0.42); font-size: 11.5px; }
+.infra-note code {
+  background: rgba(255,255,255,0.07);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--ax-off-white);
+}
+.infra-note strong { color: var(--ax-off-white); }
+
+@media (max-width: 640px) {
+  .infra-view { padding: 20px 18px 32px; }
+  .infra-cards { grid-template-columns: 1fr; }
+}

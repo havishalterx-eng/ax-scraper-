@@ -1,0 +1,72 @@
+.results-panel { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+.results-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ax-border-dark);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.results-count { font-size: 12.5px; color: var(--ax-muted-dark); }
+.results-count strong { color: var(--ax-off-white); font-size: 14px; }
+.results-source {
+  display: inline-block;
+  margin-left: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(112,217,166,0.14);
+  color: var(--ax-success);
+  cursor: help;
+}
+.results-source-model { background: rgba(245,178,79,0.15); color: var(--ax-warning); }
+.results-actions { display: flex; gap: 6px; }
+
+.results-table-wrap { overflow: auto; flex: 1; min-height: 0; }
+.results-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.results-table th {
+  position: sticky;
+  top: 0;
+  background: var(--ax-black-soft);
+  text-align: left;
+  font-weight: 600;
+  color: var(--ax-muted-dark);
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--ax-border-dark);
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+.results-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--ax-black-line);
+  color: var(--ax-off-white);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.results-table tbody tr:hover td { background: rgba(255,255,255,0.03); }
+.results-idx { width: 34px; color: var(--ax-muted-dark) !important; }
+.results-link { color: var(--ax-orange); font-weight: 600; }
+.results-link:hover { text-decoration: underline; }
+
+.results-prose {
+  margin: 0 12px 12px;
+  padding: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--ax-border-dark);
+  border-radius: var(--radius-control);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--ax-muted-dark);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+  max-height: 300px;
+}

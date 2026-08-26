@@ -1,0 +1,7 @@
+.app { display: flex; height: 100%; min-height: 0; }
+.app-main { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+
+@media (max-width: 900px) {
+  .app { flex-direction: column; }
+  .app-main { overflow-y: auto; }
+}
