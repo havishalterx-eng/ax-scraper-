@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AX Scraper</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+  :root { --accent: #FF4D0A; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: #ff7a42; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
+  ::-webkit-scrollbar-track { background: transparent; }
+  input::placeholder { color: rgba(255,255,255,0.35); }
+  button { font: inherit; cursor: pointer; }
+
+  #app { display:flex; flex-direction:column; width:100%; height:100vh; background:#050505; color:#f5f4f1; font-family:'Hanken Grotesk',-apple-system,'system-ui','Segoe UI',sans-serif; overflow:hidden; }
+
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-bottom:1px solid rgba(255,255,255,0.12); flex-shrink:0; }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .mark { display:flex; align-items:center; justify-content:center; width:30px; height:30px; background:var(--accent); }
+  .wordmark { display:flex; align-items:baseline; gap:8px; }
+  .wordmark .name { font-size:18px; font-weight:700; letter-spacing:-0.5px; }
+  .wordmark .sub { font-size:12px; color:rgba(255,255,255,0.4); font-weight:500; }
+  .topbar-right { display:flex; align-items:center; gap:16px; }
+  .status-dot-row { display:flex; align-items:center; gap:7px; font-size:12.5px; color:rgba(255,255,255,0.55); }
+  .status-dot { width:7px; height:7px; background:#3ddc84; display:inline-block; }
+  .btn-ghost { display:flex; align-items:center; gap:7px; background:transparent; border:1px solid rgba(255,255,255,0.18); color:#f5f4f1; font-size:13px; font-weight:600; padding:8px 14px; }
+
+  .body { display:flex; flex-direction:row; flex-grow:1; min-height:0; }
+
+  .sidebar { display:flex; flex-direction:column; width:288px; flex-shrink:0; border-right:1px solid rgba(255,255,255,0.12); padding:18px 0; }
+  .sidebar-head { display:flex; align-items:center; justify-content:space-between; padding:0 18px 12px; }
+  .sidebar-label { font-size:11px; font-weight:700; letter-spacing:1.2px; color:rgba(255,255,255,0.45); text-transform:uppercase; }
+  .sidebar-count { font-size:11px; color:rgba(255,255,255,0.35); }
+  .session-list { display:flex; flex-direction:column; gap:2px; padding:0 10px; overflow-y:auto; flex-grow:1; }
+  .session-card { display:flex; flex-direction:column; gap:6px; padding:12px 10px; cursor:pointer; border:1px solid rgba(255,255,255,0.1); background:transparent; }
+  .session-card.selected { border-color:var(--accent); background:rgba(255,77,10,0.08); }
+  .session-row { display:flex; align-items:center; justify-content:space-between; }
+  .session-name-group { display:flex; align-items:center; gap:8px; min-width:0; }
+  .dot { width:6px; height:6px; flex-shrink:0; }
+  .session-name { font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .session-status { font-size:10px; font-weight:600; letter-spacing:0.3px; text-transform:uppercase; flex-shrink:0; }
+  .session-url { font-size:11.5px; color:rgba(255,255,255,0.45); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-left:14px; }
+  .session-badges { display:flex; gap:6px; padding-left:14px; }
+  .badge { font-size:10px; padding:2px 6px; background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.6); }
+  .badge.stealth { background:rgba(255,77,10,0.15); color:var(--accent); }
+  .new-session-wrap { padding:12px 18px 0; }
+  .btn-new { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; background:transparent; border:1px solid var(--accent); color:var(--accent); font-size:13px; font-weight:700; padding:11px; }
+
+  .main { display:flex; flex-direction:column; flex-grow:1; min-width:0; }
+  .session-header { display:flex; align-items:center; justify-content:space-between; padding:16px 24px 0; }
+  .session-header .title { font-size:16px; font-weight:700; }
+  .session-header .url { font-size:12.5px; color:rgba(255,255,255,0.45); font-family:'SF Mono',Consolas,monospace; }
+  .needs-you { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.3px; }
+  .needs-you .dot { width:6px; height:6px; background:var(--accent); }
+
+  .tabs { display:flex; gap:4px; padding:16px 24px 0; border-bottom:1px solid rgba(255,255,255,0.12); }
+  .tab { padding:0 4px 12px; margin-bottom:-1px; font-size:13.5px; font-weight:600; color:rgba(255,255,255,0.4); border-bottom:2px solid transparent; cursor:pointer; }
+  .tab.active { color:#f5f4f1; border-bottom-color:var(--accent); }
+
+  .tab-content { flex-grow:1; overflow-y:auto; padding:20px 24px; }
+  .log-row { display:flex; gap:12px; align-items:baseline; font-size:12.5px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+  .log-time { color:rgba(255,255,255,0.35); font-family:'SF Mono',Consolas,monospace; flex-shrink:0; width:64px; }
+  .log-tool { font-family:'SF Mono',Consolas,monospace; color:var(--accent); flex-shrink:0; }
+  .log-detail { color:rgba(255,255,255,0.6); font-family:'SF Mono',Consolas,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .net-head { display:flex; gap:12px; padding:8px 0; font-size:10.5px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:rgba(255,255,255,0.4); }
+  .net-row { display:flex; gap:12px; align-items:center; padding:11px 0; border-bottom:1px solid rgba(255,255,255,0.06); font-size:12.5px; }
+  .net-method { width:50px; font-family:'SF Mono',Consolas,monospace; color:rgba(255,255,255,0.55); }
+  .net-status { width:46px; font-family:'SF Mono',Consolas,monospace; color:#3ddc84; }
+  .net-url { flex-grow:1; font-family:'SF Mono',Consolas,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:rgba(255,255,255,0.75); }
+  .btn-replay { width:80px; flex-shrink:0; background:transparent; border:1px solid rgba(255,255,255,0.18); color:#f5f4f1; font-size:11.5px; font-weight:600; padding:6px 0; }
+  .net-note { margin-top:14px; font-size:12px; color:rgba(255,255,255,0.4); font-family:'SF Mono',Consolas,monospace; }
+
+  .state-dump { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); padding:16px; font-family:'SF Mono',Consolas,monospace; font-size:12.5px; line-height:1.7; color:rgba(255,255,255,0.75); white-space:pre-line; }
+
+  .approval-banner { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:#0d0d0d; border-top:1px solid var(--accent); flex-shrink:0; }
+  .approval-label { font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.4px; }
+  .approval-reason { font-size:13px; color:rgba(255,255,255,0.75); }
+  .btn-approve { background:var(--accent); border:1px solid var(--accent); color:#050505; font-size:12.5px; font-weight:700; padding:9px 16px; }
+  .btn-dismiss { background:transparent; border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.7); font-size:12.5px; font-weight:600; padding:9px 16px; }
+
+  .task-row { display:flex; gap:10px; padding:16px 24px; border-top:1px solid rgba(255,255,255,0.12); flex-shrink:0; }
+  .task-input { flex-grow:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#f5f4f1; font-family:inherit; font-size:13.5px; padding:12px 14px; }
+  .btn-send { background:var(--accent); border:1px solid var(--accent); color:#050505; font-size:13.5px; font-weight:700; padding:0 22px; }
+
+  svg { display:block; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const state = {
+  selectedId: "unsplash-search",
+  activeTab: "activity",
+  taskInput: "",
+  approvals: { "brightdata-test": true },
+  logs: {
+    "unsplash-search": [
+      { time: "14:02:10", tool: "browser_open", detail: "unsplash.com/s/photos/mountains" },
+      { time: "14:02:13", tool: "network_requests", detail: "2 JSON XHR captured" },
+      { time: "14:02:14", tool: "replay_request", detail: "phrase=desert -> 200, 1.86M results" },
+    ],
+    "brightdata-test": [
+      { time: "13:41:02", tool: "browser_open", detail: "amazon.com/s?k=running+shoes" },
+      { time: "13:41:05", tool: "get_state", detail: "834 interactive elements" },
+      { time: "13:42:40", tool: "request_human_help", detail: "site returned a soft block, needs a look" },
+    ],
+    "default": [
+      { time: "12:10:44", tool: "browser_open", detail: "example.com" },
+      { time: "12:10:45", tool: "click", detail: "index 1 -> iana.org/domains/example" },
+    ],
+  },
+};
+
+const sessionDefs = [
+  { id: "unsplash-search", name: "unsplash-search", url: "unsplash.com/s/photos/mountains", status: "idle", proxy: "webshare", stealth: true },
+  { id: "brightdata-test", name: "brightdata-test", url: "amazon.com/s?k=running+shoes", status: "needs you", proxy: "brightdata-isp", stealth: true },
+  { id: "default", name: "default", url: "example.com", status: "idle", proxy: "direct", stealth: false },
+];
+
+const networkLog = [
+  { method: "GET", status: "200", url: "unsplash.com/ngetty/v3/search/images/creative?phrase=mountains", replayDetail: "phrase=ocean -> 200, 11.1M results" },
+  { method: "POST", status: "200", url: "unsplash.com/nabc", replayDetail: "ad-decision endpoint, skipped" },
+];
+
+const stateDump = "url=https://unsplash.com/s/photos/mountains\ntitle=Unsplash\n\n[1]<a href=\"/\">\n[2]<input type=text placeholder=\"Search photos\">\n[3]<button> Search\n[4]<a href=\"/s/photos/nature\"> Nature\n[5]<a href=\"/s/photos/travel\"> Travel";
+
+function activeDef() {
+  return sessionDefs.find((d) => d.id === state.selectedId) ?? sessionDefs[0];
+}
+
+function pushLog(id, tool, detail) {
+  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  if (!state.logs[id]) state.logs[id] = [];
+  state.logs[id].push({ time, tool, detail });
+  state.activeTab = "activity";
+  render();
+}
+
+function sendTask() {
+  const el = document.getElementById("task-input");
+  const text = (el ? el.value : state.taskInput).trim();
+  if (!text) return;
+  state.taskInput = "";
+  pushLog(state.selectedId, "task", text);
+}
+
+function iconSettings() {
+  return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+}
+function iconPlus() {
+  return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>';
+}
+function iconMark() {
+  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#050505" stroke-width="2.4" stroke-linecap="square" stroke-linejoin="miter"><path d="M4 20 L10 4 L16 20 M6.5 14 L13.5 14"/><path d="M15 20 L20 4"/></svg>';
+}
+
+function render() {
+  const active = activeDef();
+  const humanNeeded = !!state.approvals[active.id];
+  const log = state.logs[state.selectedId] ?? [];
+
+  const sessionsHtml = sessionDefs.map((d) => {
+    const selected = d.id === state.selectedId;
+    const status = state.approvals[d.id] ? "needs you" : d.status === "needs you" ? "idle" : d.status;
+    const dotColor = status === "needs you" ? "var(--accent)" : status === "idle" ? "#3ddc84" : "rgba(255,255,255,0.4)";
+    return `
+      <div class="session-card ${selected ? "selected" : ""}" data-select="${d.id}">
+        <div class="session-row">
+          <div class="session-name-group">
+            <span class="dot" style="background:${dotColor}"></span>
+            <span class="session-name">${d.name}</span>
+          </div>
+          <span class="session-status" style="color:${dotColor}">${status}</span>
+        </div>
+        <div class="session-url">${d.url}</div>
+        <div class="session-badges">
+          <span class="badge">${d.proxy}</span>
+          ${d.stealth ? '<span class="badge stealth">stealth</span>' : ""}
+        </div>
+      </div>`;
+  }).join("");
+
+  const tabsHtml = ["activity", "network", "state"].map((t) => {
+    const label = t[0].toUpperCase() + t.slice(1);
+    return `<div class="tab ${state.activeTab === t ? "active" : ""}" data-tab="${t}">${label}</div>`;
+  }).join("");
+
+  let tabContentHtml = "";
+  if (state.activeTab === "activity") {
+    tabContentHtml = `<div>${log.map((e) => `
+      <div class="log-row">
+        <span class="log-time">${e.time}</span>
+        <span class="log-tool">${e.tool}</span>
+        <span class="log-detail">${e.detail}</span>
+      </div>`).join("")}</div>`;
+  } else if (state.activeTab === "network") {
+    tabContentHtml = `
+      <div class="net-head"><span style="width:50px">Method</span><span style="width:46px">Status</span><span style="flex-grow:1">URL</span><span style="width:80px"></span></div>
+      ${networkLog.map((r, i) => `
+        <div class="net-row">
+          <span class="net-method">${r.method}</span>
+          <span class="net-status">${r.status}</span>
+          <span class="net-url">${r.url}</span>
+          <button class="btn-replay" data-replay="${i}">Replay</button>
+        </div>`).join("")}
+      <div class="net-note">real capture, 2026-08-26 · unsplash.com/s/photos/mountains</div>`;
+  } else {
+    tabContentHtml = `<div class="state-dump">${stateDump}</div>`;
+  }
+
+  const approvalHtml = humanNeeded ? `
+    <div class="approval-banner">
+      <div>
+        <div class="approval-label">Approval needed</div>
+        <div class="approval-reason">Amazon returned a soft block (HTTP 503) on this proxy identity - rotate or take over.</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-dismiss" id="dismiss-approval">Dismiss</button>
+        <button class="btn-approve" id="approve-approval">Take over &amp; continue</button>
+      </div>
+    </div>` : "";
+
+  document.getElementById("app").innerHTML = `
+    <div class="topbar">
+      <div class="brand">
+        <div class="mark">${iconMark()}</div>
+        <div class="wordmark"><span class="name">AX SCRAPER</span><span class="sub">by Alter Engine</span></div>
+      </div>
+      <div class="topbar-right">
+        <div class="status-dot-row"><span class="status-dot"></span>browser-mcp · ap-south-1 · live</div>
+        <button class="btn-ghost">${iconSettings()} Settings</button>
+      </div>
+    </div>
+    <div class="body">
+      <div class="sidebar">
+        <div class="sidebar-head"><span class="sidebar-label">Sessions</span><span class="sidebar-count">${sessionDefs.length} total</span></div>
+        <div class="session-list">${sessionsHtml}</div>
+        <div class="new-session-wrap"><button class="btn-new" id="new-session">${iconPlus()} New session</button></div>
+      </div>
+      <div class="main">
+        <div class="session-header">
+          <div><div class="title">${active.name}</div><div class="url">${active.url}</div></div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            ${humanNeeded ? '<div class="needs-you"><span class="dot"></span> Needs you</div>' : ""}
+            <button class="btn-ghost" id="close-session">Close session</button>
+          </div>
+        </div>
+        <div class="tabs">${tabsHtml}</div>
+        <div class="tab-content">${tabContentHtml}</div>
+        ${approvalHtml}
+        <div class="task-row">
+          <input class="task-input" id="task-input" placeholder="Tell the agent what to do next…" value="${state.taskInput}">
+          <button class="btn-send" id="send-task">Send</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll("[data-select]").forEach((el) => {
+    el.addEventListener("click", () => { state.selectedId = el.dataset.select; render(); });
+  });
+  document.querySelectorAll("[data-tab]").forEach((el) => {
+    el.addEventListener("click", () => { state.activeTab = el.dataset.tab; render(); });
+  });
+  document.querySelectorAll("[data-replay]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const r = networkLog[Number(el.dataset.replay)];
+      pushLog(state.selectedId, "replay_request", r.replayDetail);
+    });
+  });
+  const newBtn = document.getElementById("new-session");
+  if (newBtn) newBtn.addEventListener("click", () => pushLog(state.selectedId, "browser_open", "new session started"));
+  const closeBtn = document.getElementById("close-session");
+  if (closeBtn) closeBtn.addEventListener("click", () => pushLog(state.selectedId, "close_browser", active.id));
+  const dismissBtn = document.getElementById("dismiss-approval");
+  if (dismissBtn) dismissBtn.addEventListener("click", () => { state.approvals[active.id] = false; render(); });
+  const approveBtn = document.getElementById("approve-approval");
+  if (approveBtn) approveBtn.addEventListener("click", () => { state.approvals[active.id] = false; render(); });
+  const taskInput = document.getElementById("task-input");
+  if (taskInput) {
+    taskInput.addEventListener("input", (e) => { state.taskInput = e.target.value; });
+    taskInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendTask(); });
+    taskInput.focus();
+    taskInput.setSelectionRange(state.taskInput.length, state.taskInput.length);
+  }
+  const sendBtn = document.getElementById("send-task");
+  if (sendBtn) sendBtn.addEventListener("click", sendTask);
+}
+
+render();
+</script>
+</body>
+</html>
