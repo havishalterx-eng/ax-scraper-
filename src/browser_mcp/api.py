@@ -616,10 +616,43 @@ async def _run_direct_plan(
     Logging, session forcing, record capture and the finished-job shape are
     identical to the model path - the console and the API cannot tell the
     difference, which is the point: this is the same run, minus the guessing.
-    If any step fails the job fails honestly rather than falling back to the
-    model, because a broken selector or a dead URL is not something a model
-    would have fixed either.
+    If any step fails, the run is handed to the model so it can adapt instead
+    of failing outright; a plan that completes still costs no model tokens.
     """
+
+    async def _handover(step: dict, error_text: str) -> None:
+        """Move a failed direct run onto the model path."""
+        name = step["tool"]
+        job["mode"] = "fallback"
+        job["status"] = "running"
+        _log(
+            job,
+            {
+                "type": "system",
+                "text": (
+                    f"Direct step '{name}' failed: {error_text[:500]}. "
+                    "Continuing with the model."
+                ),
+            },
+        )
+        failure_msg = (
+            f"The direct plan failed on step '{name}' with arguments "
+            f"{json.dumps(step['args'], sort_keys=True, default=str)}. "
+            f"Error: {error_text}\n"
+            "Continue the task using the model. Do not blindly repeat the same "
+            "failing call; inspect the page and adapt."
+        )
+        job["messages"].append({"role": "user", "content": [{"text": failure_msg}]})
+        job["current_action"] = None
+        await asyncio.to_thread(_persist_job, job_id, job)
+        await _run_agent_job(
+            job_id,
+            session,
+            persistent=persistent,
+            run_id=run_id,
+            webhook_url=webhook_url,
+        )
+
     job = JOBS[job_id]
     job["mode"] = "direct"
     _log(job, {"type": "system", "text": f"Running {len(plan)} known step(s) directly - no model needed."})
@@ -632,18 +665,16 @@ async def _run_direct_plan(
                 args["persistent"] = persistent
             _log(job, {"type": "tool_call", "name": name, "args": args})
             job["current_action"] = name
-            result = await mcp.call_tool(name, args)
+            try:
+                result = await mcp.call_tool(name, args)
+            except Exception as exc:  # noqa: BLE001
+                detail = str(exc.__cause__) if exc.__cause__ else str(exc)
+                await _handover(step, detail)
+                return
             text_out = _tool_text(result)
             if result.is_error:
                 _log(job, {"type": "tool_result", "name": name, "text": text_out[:4000], "is_error": True})
-                await _finish_job(
-                    job,
-                    status="error",
-                    result=None,
-                    error=f"{name} failed: {text_out}",
-                    run_id=run_id,
-                    webhook_url=webhook_url,
-                )
+                await _handover(step, text_out)
                 return
             _log(job, {"type": "tool_result", "name": name, "text": text_out[:4000], "is_error": False})
             job["steps_used"] = job.get("steps_used", 0) + 1
