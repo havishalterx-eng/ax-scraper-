@@ -347,6 +347,24 @@ end to end by driving the UI itself, not just the API.
 - Delivery integrations beyond a plain webhook (Make/n8n/Zapier/email/cloud
   storage) - each needs its own vendor credentials/OAuth app, none set up
 
+## Model choice
+
+The default model is `zai.glm-4.7-flash` in `ap-south-1`. Override it for a single run with `BEDROCK_MODEL_ID=<model-id>`, or set it in the environment before starting the API. The loop itself is model-agnostic.
+
+We switched from Nova Pro after measuring the same two tasks end to end. A 40-product Amazon harvest cost $0.0063 on Nova Pro and $0.0011 on GLM; a 20-lead Maps run cost $0.0067 on Nova Pro and $0.0007 on GLM. Both returned the same records. The gap comes from list price and tokenisation: GLM is priced at $0.08/$0.48 per million input/output tokens against Nova Pro's $0.47/$1.88, and on an identical prompt Nova billed 410 input tokens where GLM billed 180. Every step of the loop pays that difference again.
+
+Prompt caching was part of the comparison. GLM on Bedrock rejects `cachePoint` with `invoked an unsupported model or your request did not allow prompt caching`, so caching is unavailable with the current default. Nova models accept it. Caching only discounts input, and Nova Pro with perfect caching still costs several times more than GLM with no caching, so the switch held on price.
+
+What did replace caching was a structural cut in the per-step prompt. Trimming tool descriptions and hiding arguments the model never needs to see brought the fixed per-step cost from 3,480 tokens down to 2,095. That saving applies to every model and depends on no vendor feature.
+
+Template runs use no model at all: a filled-in template renders a fixed plan of tool calls, and the API executes those directly. Editing an agent's prompt drops its plan and sends the new prompt to the model on every run. The console warns before that happens.
+
+The open question is Nova Lite. It is cheaper than GLM on list price ($0.036/$0.284 per million) and supports Bedrock prompt caching, so it could win on both counts if its quality holds. The eval harness in `scripts/eval.py` exists to settle that. Its first GLM-vs-Nova-Lite comparison (see commit `f68d4eb`) gave GLM 5/6 successes at $0.004334 and Nova Lite 3/6 successes at $0.001728. Reddit blocked both; Nova Lite also collected one record on the pure question-answering task and 29 instead of 30 on the LinkedIn hard case. Re-run the harness as models and prices change.
+
+Governance note: GLM is a third-party vendor model hosted on Bedrock. That is fine for first-party lead generation, but if this becomes a product running customer data the model choice should be revisited deliberately rather than inherited.
+
+IAM note: the production user `ax-scraper-bedrock` is scoped to `bedrock:InvokeModel` on Nova models and on `zai.glm-4.7-flash` only. Changing the model in production requires updating that policy first; otherwise every run fails with `AccessDeniedException`.
+
 ## Setup
 
 ```bash
