@@ -6,7 +6,7 @@ import { createTask, listTemplates, startTemplate } from '../api.js';
 const SUGGESTIONS = [
   'Go to https://news.ycombinator.com/ and extract 30 records with titles, points and links.',
   'Go to https://www.amazon.in/s?k=running+shoes and extract 50 records with price and rating.',
-  'Go to https://old.reddit.com/r/startups/hot/ and extract 25 posts with titles, scores and links.',
+  'Find dental clinics in Kondapur Hyderabad and tell me which ones have no website.',
 ];
 
 export default function HomeView({ onJobStarted, onView, tasks, health }) {

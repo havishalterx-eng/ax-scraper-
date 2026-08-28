@@ -11,7 +11,7 @@ const ACTIVE = new Set(['running', 'needs_human']);
 const EXAMPLES = [
   'Find the top 20 wireless headphones on Amazon India with price, rating and source URL.',
   'Collect the first page of Google Maps results for dental clinics in Hyderabad with name, rating and website.',
-  'Get the top posts on reddit.com/r/programming with title, score and link.',
+  'Go to https://news.ycombinator.com/newest and collect the 25 newest stories with titles and links.',
 ];
 
 export default function RunConsole({ jobId, onJobStarted, session, onSessionChange }) {

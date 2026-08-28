@@ -23,7 +23,11 @@ the fallback for anything a plan cannot express.
 
 from __future__ import annotations
 
-CATEGORIES = ["Lead generation", "E-commerce", "Social media", "Research", "Jobs"]
+# "Social media" was dropped with the Reddit template: old.reddit.com now
+# redirects to a login wall and www.reddit.com kills browser_open outright,
+# so nothing remained under it. A filter chip that can only ever return an
+# empty list reads as a broken product, not an empty category.
+CATEGORIES = ["Lead generation", "E-commerce", "Research", "Jobs"]
 
 TEMPLATES: list[dict] = [
     {

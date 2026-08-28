@@ -61,10 +61,17 @@ TASKS: list[dict[str, Any]] = [
         "prompt": "Go to https://news.ycombinator.com/newest and collect 15 titles with links.",
         "expected_records": 15,
     },
+    # Was a Reddit listing task. Both routes are dead: old.reddit.com redirects
+    # to a login wall, and www.reddit.com raises "Execution context was
+    # destroyed" out of browser_open. Measuring a model against a site that
+    # cannot answer measures nothing, so the slot now measures the thing that
+    # failure taught us instead - whether a run gives up quickly on a wall.
+    # Success here is a cheap, fast finish, not records: the original Reddit
+    # failure cost 300 seconds of a model looping on a login page.
     {
-        "name": "Reddit r/programming hot",
-        "prompt": "Go to https://www.reddit.com/r/programming/hot/ and collect 25 posts with title and URL.",
-        "expected_records": 25,
+        "name": "Login wall fast-fail",
+        "prompt": "Go to https://old.reddit.com/r/programming/hot/ and collect 25 posts with title and URL.",
+        "expected_records": 0,
     },
     {
         "name": "HN top story QA",

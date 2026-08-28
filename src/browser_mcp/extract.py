@@ -224,7 +224,7 @@ _WALL_TEXT_SNIPPETS = (
 )
 
 
-def _looks_like_wall(url: str, body_text: str) -> bool:
+def looks_like_wall(url: str, body_text: str) -> bool:
     lowered_url = url.lower()
     if any(snippet in lowered_url for snippet in _WALL_URL_SNIPPETS):
         return True

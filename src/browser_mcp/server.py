@@ -9,7 +9,7 @@ from .maps import COLLECT_PLACES_JS, PLACE_DETAIL_JS, SCROLL_FEED_JS, format_lea
 from .verify import verify_websites
 from .extract import (
     EXTRACT_JS,
-    _looks_like_wall,
+    looks_like_wall,
     dedupe_records,
     format_records,
     next_page_url,
@@ -218,7 +218,7 @@ async def extract_records(
         if not batch:
             if page_index == 1:
                 body_text = await page.inner_text("body")
-                if _looks_like_wall(page.url, body_text[:2000]):
+                if looks_like_wall(page.url, body_text[:2000]):
                     return (
                         f"url={page.url}\n\n"
                         "This page is a sign-in or security wall, not a listing page. "
