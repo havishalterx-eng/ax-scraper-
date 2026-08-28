@@ -153,6 +153,15 @@ export default function AgentsView({ onJobStarted, onView }) {
               <div className="agent-card-top">
                 <span className="agent-card-badge"><IconSpark size={11} /></span>
                 <span className="agent-card-name">{a.name}</span>
+                {a.latest_version?.plan ? (
+                  <span className="pill pill-done" title="This agent runs the template's fixed tool calls. No model is involved, so it costs nothing.">
+                    no model · free
+                  </span>
+                ) : (
+                  <span className="pill pill-idle" title="This agent sends the prompt to a model on every run.">
+                    uses model
+                  </span>
+                )}
               </div>
               <p className="agent-card-prompt">{a.latest_version?.prompt ?? 'No prompt yet'}</p>
             </button>
@@ -213,6 +222,11 @@ export default function AgentsView({ onJobStarted, onView }) {
 
                 <label className="field-label">Prompt (saving creates a new version)</label>
                 <textarea className="text-area" rows={4} value={promptEdit} onChange={(e) => setPromptEdit(e.target.value)} />
+                {detail.versions?.[0]?.plan && promptEdit.trim() !== (detail.versions?.[0]?.prompt ?? '') && (
+                  <div className="agents-plan-warning">
+                    Saving a new prompt will drop this agent's fixed plan. From then on every run will go through a model and cost tokens.
+                  </div>
+                )}
                 <button type="button" className="btn btn-ghost btn-sm agents-save" disabled={busy || promptEdit.trim() === (detail.versions?.[0]?.prompt ?? '')} onClick={savePrompt}>
                   Save as new version
                 </button>

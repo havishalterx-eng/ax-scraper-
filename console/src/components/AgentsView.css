@@ -127,6 +127,16 @@
 .agent-modal-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ax-black-line); }
 .agent-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
 .agents-save { margin-top: 10px; }
+.agents-plan-warning {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--ax-warning);
+  background: rgba(245,178,79,0.08);
+  color: var(--ax-warning);
+  font-size: 12px;
+  line-height: 1.55;
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
 
 .agents-sched-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .agents-sched-row select { width: auto; min-width: 140px; }
