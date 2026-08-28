@@ -224,6 +224,22 @@ _WALL_TEXT_SNIPPETS = (
 )
 
 
+def wall_message(url: str) -> str:
+    """What to tell the model when it has landed on a wall.
+
+    Lives beside the detector so the wording cannot drift: `extract_records`
+    and the page-state reader both report the same page, and two copies of
+    this text would eventually disagree about what the model should do next.
+    """
+    return (
+        f"url={url}\n\n"
+        "This page is a sign-in or security wall, not a listing page. "
+        "The site requires a logged-in session or human verification before it will show results. "
+        "Repeating extraction, scrolling, or navigating elsewhere on this page will not help. "
+        "Use a signed-in session (browser_open with persistent=True) or call request_human_help."
+    )
+
+
 def looks_like_wall(url: str, body_text: str) -> bool:
     lowered_url = url.lower()
     if any(snippet in lowered_url for snippet in _WALL_URL_SNIPPETS):

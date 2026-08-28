@@ -10,6 +10,7 @@ from .verify import verify_websites
 from .extract import (
     EXTRACT_JS,
     looks_like_wall,
+    wall_message,
     dedupe_records,
     format_records,
     next_page_url,
@@ -34,16 +35,6 @@ def _normalize_url(url: str) -> str:
 
 
 _DESTROYED_CONTEXT = "Execution context was destroyed"
-
-
-def _wall_message(url: str) -> str:
-    return (
-        f"url={url}\n\n"
-        "This page is a sign-in or security wall, not a listing page. "
-        "The site requires a logged-in session or human verification before it will show results. "
-        "Repeating extraction, scrolling, or navigating elsewhere on this page will not help. "
-        "Use a signed-in session (browser_open with persistent=True) or call request_human_help."
-    )
 
 
 def _redirect_message(page, cause: Exception) -> str:
@@ -78,7 +69,16 @@ async def _read_state_once(page):
             return _redirect_message(page, exc2)
 
 
-async def _current_state(session: str) -> str:
+async def _current_state(session: str, requested_url: str | None = None) -> str:
+    """The page as indexed interactive elements.
+
+    `requested_url` is passed only by the tools that just navigated. The wall
+    check runs solely when the page ended up somewhere other than where it was
+    sent, because that is what a wall does - it intercepts. Checking on every
+    state read instead would break the one flow the wall message recommends:
+    opening a sign-in page on purpose to hand it to a human. A login form has
+    to come back as clickable elements, not as advice about login forms.
+    """
     browser_session = await manager.get(session)
     page = await browser_session.ensure_page()
     data = await _read_state_once(page)
@@ -98,9 +98,13 @@ async def _current_state(session: str) -> str:
         data = await _read_state_once(page)
         if isinstance(data, str):
             return data
-    body_text = await page.inner_text("body")
-    if looks_like_wall(page.url, body_text[:2000]):
-        return _wall_message(page.url)
+    if requested_url and page.url != requested_url:
+        try:
+            body_text = await page.inner_text("body")
+        except Exception:  # noqa: BLE001 - a body read is a diagnostic, never the answer
+            body_text = ""
+        if looks_like_wall(page.url, body_text[:2000]):
+            return wall_message(page.url)
     return format_state(data)
 
 
@@ -127,16 +131,18 @@ async def browser_open(url: str, session: str = DEFAULT_SESSION, persistent: boo
     throwaway session - nothing survives closing it.
     """
     page = await _get_page(session, persistent=persistent)
-    await page.goto(_normalize_url(url), wait_until="domcontentloaded")
-    return await _current_state(session)
+    target = _normalize_url(url)
+    await page.goto(target, wait_until="domcontentloaded")
+    return await _current_state(session, requested_url=target)
 
 
 @mcp.tool()
 async def navigate(url: str, session: str = DEFAULT_SESSION) -> str:
     """Navigate a session's page to a new URL. Returns the updated state."""
     page = await _get_page(session)
-    await page.goto(_normalize_url(url), wait_until="domcontentloaded")
-    return await _current_state(session)
+    target = _normalize_url(url)
+    await page.goto(target, wait_until="domcontentloaded")
+    return await _current_state(session, requested_url=target)
 
 
 @mcp.tool()
@@ -272,13 +278,7 @@ async def extract_records(
             if page_index == 1:
                 body_text = await page.inner_text("body")
                 if looks_like_wall(page.url, body_text[:2000]):
-                    return (
-                        f"url={page.url}\n\n"
-                        "This page is a sign-in or security wall, not a listing page. "
-                        "The site requires a logged-in session or human verification before it will show results. "
-                        "Repeating extraction, scrolling, or navigating elsewhere on this page will not help. "
-                        "Use a signed-in session (browser_open with persistent=True) or call request_human_help."
-                    )
+                    return wall_message(page.url)
             notes.append(f"Page {page_index} had no records; stopped.")
             break
         # A site that ignores an out-of-range page number re-serves the page
