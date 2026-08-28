@@ -6,6 +6,7 @@ from mcp.server import MCPServer
 
 from .browser import manager
 from .maps import COLLECT_PLACES_JS, PLACE_DETAIL_JS, SCROLL_FEED_JS, format_leads
+from .verify import verify_websites
 from .extract import (
     EXTRACT_JS,
     dedupe_records,
@@ -270,6 +271,7 @@ async def maps_leads(
     session: str = DEFAULT_SESSION,
     limit: int = 20,
     visit_details: bool = True,
+    verify_sites: bool = True,
 ) -> str:
     """Collect Google Maps business listings, including whether each has a website.
 
@@ -339,6 +341,13 @@ async def maps_leads(
 
     if failed:
         notes.append(f"{failed} listing(s) could not be opened and were skipped.")
+
+    if verify_sites and rows:
+        # Maps' website field is not trustworthy on its own: it happily shows a
+        # social page, a directory listing, or a domain that no longer loads.
+        # Fetching each one is what turns a raw list into a qualified one.
+        rows = await verify_websites(rows)
+
     remember_extraction(session, rows, search_url)
     return format_leads(rows, notes)
 

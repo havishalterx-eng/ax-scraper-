@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .verify import LEAD_VERDICTS
+
 # Scrolls the results panel until it stops producing new places. Maps loads
 # lazily on scroll, and stops when it runs out - detected by the count going
 # flat rather than by a fixed number of scrolls.
@@ -88,36 +90,89 @@ PLACE_DETAIL_JS = """
 
 
 def format_leads(rows: list[dict[str, Any]], notes: list[str]) -> str:
-    """Renders leads as compact text, no-website ones first.
+    """Renders leads grouped by how qualified they are.
 
-    Ordered that way because for website-sales prospecting the businesses
-    without a site are the entire point - burying them under the ones that
-    already have one makes the caller re-sort a result they asked for.
+    Qualified prospects come first because that is the entire output someone
+    doing website sales is asking for; making them re-sort a list to find the
+    businesses without a site would waste the work the verifier just did.
+    Each row carries the evidence behind its verdict, so a claim like "no
+    website" can be checked rather than taken on trust.
     """
     if not rows:
         return "No Maps listings found. " + " ".join(notes)
 
-    no_site = [r for r in rows if not r.get("website")]
-    has_site = [r for r in rows if r.get("website")]
+    verified = any("website_status" in r for r in rows)
+    if not verified:
+        # Unverified fallback: presence of a URL is all that is known, and the
+        # output should not imply more than that.
+        no_site = [r for r in rows if not r.get("website")]
+        has_site = [r for r in rows if r.get("website")]
+        lines = [
+            f"Collected {len(rows)} Google Maps listings (websites NOT verified).",
+            f"{len(no_site)} list no website; {len(has_site)} list one.",
+            "",
+        ]
+        for label, group in (("NO WEBSITE LISTED", no_site), ("WEBSITE LISTED", has_site)):
+            if not group:
+                continue
+            lines.append(f"--- {label} ({len(group)}) ---")
+            for i, r in enumerate(group, 1):
+                lines.append(_row_line(i, r))
+            lines.append("")
+        if notes:
+            lines.append(" ".join(notes))
+        return "\n".join(lines)
+
+    leads = [r for r in rows if r.get("website_status") in LEAD_VERDICTS]
+    live = [r for r in rows if r.get("website_status") == "LIVE"]
+    unknown = [r for r in rows if r.get("website_status") == "UNVERIFIED"]
+
+    # Strongest signal first: no site at all, then a social/directory-only
+    # presence, then a domain that exists but does not work.
+    order = {"NONE": 0, "SOCIAL_ONLY": 1, "DIRECTORY_ONLY": 2, "PARKED": 3, "BROKEN": 4}
+    leads.sort(key=lambda r: order.get(r.get("website_status", ""), 9))
+
+    counts: dict[str, int] = {}
+    for r in rows:
+        status = r.get("website_status", "UNVERIFIED")
+        counts[status] = counts.get(status, 0) + 1
 
     lines = [
-        f"Collected {len(rows)} Google Maps listings.",
-        f"{len(no_site)} have NO website (the sales targets); {len(has_site)} already have one.",
+        f"Collected {len(rows)} Google Maps listings; every website was fetched and checked.",
+        f"QUALIFIED LEADS: {len(leads)} of {len(rows)} have no working website of their own.",
+        "Breakdown: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())),
         "",
     ]
-    for label, group in (("NO WEBSITE", no_site), ("HAS WEBSITE", has_site)):
-        if not group:
-            continue
-        lines.append(f"--- {label} ({len(group)}) ---")
-        for i, r in enumerate(group, 1):
-            parts = [f"[{i}] {r.get('name') or '(unnamed)'}"]
-            for key in ("rating", "phone", "address", "category"):
-                if r.get(key):
-                    parts.append(f"{key}={r[key]}")
-            if r.get("website"):
-                parts.append(f"website={r['website']}")
-            lines.append(" | ".join(parts))
+
+    if leads:
+        lines.append(f"=== QUALIFIED LEADS ({len(leads)}) - pitch these ===")
+        for i, r in enumerate(leads, 1):
+            lines.append(_row_line(i, r, with_verdict=True))
+        lines.append("")
+    if unknown:
+        lines.append(f"=== NEEDS A LOOK ({len(unknown)}) ===")
+        for i, r in enumerate(unknown, 1):
+            lines.append(_row_line(i, r, with_verdict=True))
+        lines.append("")
+    if live:
+        lines.append(f"=== ALREADY HAVE A WORKING SITE ({len(live)}) - skip ===")
+        for i, r in enumerate(live, 1):
+            lines.append(_row_line(i, r, with_verdict=True))
         lines.append("")
     if notes:
         lines.append(" ".join(notes))
     return "\n".join(lines)
+
+
+def _row_line(index: int, row: dict[str, Any], with_verdict: bool = False) -> str:
+    parts = [f"[{index}] {row.get('name') or '(unnamed)'}"]
+    if with_verdict and row.get("website_status"):
+        parts.append(f"verdict={row['website_status']}")
+    for key in ("rating", "phone", "address", "category"):
+        if row.get(key):
+            parts.append(f"{key}={row[key]}")
+    if row.get("website"):
+        parts.append(f"listed_site={row['website']}")
+    if with_verdict and row.get("website_evidence"):
+        parts.append(f"evidence={row['website_evidence']}")
+    return " | ".join(parts)
