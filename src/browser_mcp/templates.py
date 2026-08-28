@@ -52,14 +52,14 @@ TEMPLATES: list[dict] = [
         "category": "Lead generation",
         "site": "Google Maps",
         "accent": "#34A853",
-        "description": "Build a local business list - names, ratings, review counts and links for a business type in a place.",
+        "description": "Build a local business list with phone, address, rating and website - and see at a glance which businesses have no website at all.",
         "inputs": [
             {"key": "business", "label": "Business type", "default": "dental clinics"},
             {"key": "location", "label": "Location", "default": "Hyderabad"},
             {"key": "count", "label": "How many businesses", "default": "30"},
         ],
-        "prompt": "Go to https://www.google.com/maps/search/{business_plus}+in+{location_plus} and wait for the results list to load. Call scroll_page 3 times to load more results, then call extract_records with limit {count} to collect the business names, ratings, review counts and links. Google Maps loads results as you scroll, so scroll before extracting.",
-        "est_steps": "4-8 steps",
+        "prompt": "Call maps_leads with query \"{business} in {location}\" and limit {count} to collect the businesses, including which ones have no website.",
+        "est_steps": "1-2 steps",
     },
     {
         "id": "reddit-posts",

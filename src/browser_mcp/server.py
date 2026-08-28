@@ -5,6 +5,7 @@ import os
 from mcp.server import MCPServer
 
 from .browser import manager
+from .maps import COLLECT_PLACES_JS, PLACE_DETAIL_JS, SCROLL_FEED_JS, format_leads
 from .extract import (
     EXTRACT_JS,
     dedupe_records,
@@ -261,6 +262,85 @@ async def extract_records(
         "Do not retype the rows."
     )
     return header + summary
+
+
+@mcp.tool()
+async def maps_leads(
+    query: str,
+    session: str = DEFAULT_SESSION,
+    limit: int = 20,
+    visit_details: bool = True,
+) -> str:
+    """Collect Google Maps business listings, including whether each has a website.
+
+    Use this for ANY Google Maps request - local businesses, lead lists,
+    "find me dentists in X". Do not use browser_open + extract_records on
+    Maps; that returns only the handful of results visible before scrolling
+    and cannot see the website field at all.
+
+    `query` is what you would type into Maps, e.g. "dental clinics in
+    Hyderabad". `limit` is how many listings to collect. `visit_details=True`
+    (the default) opens each listing to read its website, phone, address and
+    rating - this is the only way to know whether a business has a website,
+    which is the field that matters for prospecting. Set it False for a fast
+    name-and-link-only pass.
+
+    Results come back grouped: businesses with NO website first, since those
+    are usually the point of the search.
+
+    Visiting details costs roughly a second per listing, so a limit of 20 takes
+    around half a minute. Ask for what you need rather than a large round
+    number.
+    """
+    page = await _get_page(session)
+    limit = max(1, min(limit, 120))
+    notes: list[str] = []
+
+    search_url = "https://www.google.com/maps/search/" + query.strip().replace(" ", "+")
+    await page.goto(search_url, wait_until="domcontentloaded")
+    await page.wait_for_timeout(4500)
+
+    scroll_info = await page.evaluate(SCROLL_FEED_JS, limit)
+    if not scroll_info.get("hadFeed"):
+        return (
+            "Google Maps did not render its results panel. It may have shown a consent "
+            "or CAPTCHA page instead - call request_human_help so a person can clear it, "
+            "then try again."
+        )
+
+    places = await page.evaluate(COLLECT_PLACES_JS)
+    if not places:
+        return "Maps loaded but produced no listings for that query. Try a broader search term."
+    if len(places) < limit:
+        notes.append(
+            f"Maps only returned {len(places)} listings for this query - that is all it has. "
+            "Search a broader area or a nearby locality for more."
+        )
+    places = places[:limit]
+
+    if not visit_details:
+        rows = [{"name": p["name"], "url": p["url"]} for p in places]
+        notes.append("Details not visited, so website presence is unknown for these.")
+        return format_leads(rows, notes)
+
+    rows: list[dict] = []
+    failed = 0
+    for place in places:
+        try:
+            await page.goto(place["url"], wait_until="domcontentloaded")
+            await page.wait_for_timeout(2200)
+            detail = await page.evaluate(PLACE_DETAIL_JS)
+        except Exception:  # noqa: BLE001 - one bad listing must not lose the rest
+            failed += 1
+            continue
+        detail["name"] = detail.get("name") or place["name"]
+        detail["maps_url"] = place["url"]
+        rows.append(detail)
+
+    if failed:
+        notes.append(f"{failed} listing(s) could not be opened and were skipped.")
+    remember_extraction(session, rows, search_url)
+    return format_leads(rows, notes)
 
 
 @mcp.tool()
