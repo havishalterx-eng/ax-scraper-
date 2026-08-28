@@ -64,6 +64,7 @@ def init_db() -> None:
                 version_number INTEGER NOT NULL,
                 prompt TEXT NOT NULL,
                 note TEXT NOT NULL DEFAULT '',
+                plan TEXT,
                 created_at REAL NOT NULL
             );
             CREATE TABLE IF NOT EXISTS agent_runs (
@@ -102,9 +103,20 @@ def init_db() -> None:
             );
             """
         )
+        # `plan` arrived after agents already existed on disk, so it is added
+        # rather than assumed. A version without one runs through the model,
+        # which is exactly the behaviour those agents already had.
+        columns = {r["name"] for r in conn.execute("PRAGMA table_info(agent_versions)")}
+        if "plan" not in columns:
+            conn.execute("ALTER TABLE agent_versions ADD COLUMN plan TEXT")
 
 
-def create_agent(name: str, prompt: str, browser_mode: str = "Standard Browser") -> dict:
+def create_agent(
+    name: str,
+    prompt: str,
+    browser_mode: str = "Standard Browser",
+    plan: list[dict] | None = None,
+) -> dict:
     agent_id = uuid.uuid4().hex[:12]
     version_id = uuid.uuid4().hex[:12]
     session = f"agent-{agent_id}"  # each saved agent gets its own dedicated, stable browser identity
@@ -115,8 +127,8 @@ def create_agent(name: str, prompt: str, browser_mode: str = "Standard Browser")
             (agent_id, name, session, browser_mode, now),
         )
         conn.execute(
-            "INSERT INTO agent_versions (id, agent_id, version_number, prompt, note, created_at) VALUES (?,?,1,?,?,?)",
-            (version_id, agent_id, prompt, "Initial build", now),
+            "INSERT INTO agent_versions (id, agent_id, version_number, prompt, note, plan, created_at) VALUES (?,?,1,?,?,?,?)",
+            (version_id, agent_id, prompt, "Initial build", json.dumps(plan) if plan else None, now),
         )
     return get_agent(agent_id)
 
@@ -179,7 +191,7 @@ def latest_version(agent_id: str) -> dict | None:
         return dict(row) if row else None
 
 
-def add_version(agent_id: str, prompt: str, note: str) -> dict:
+def add_version(agent_id: str, prompt: str, note: str, plan: list[dict] | None = None) -> dict:
     with _conn() as conn:
         last = conn.execute(
             "SELECT MAX(version_number) AS n FROM agent_versions WHERE agent_id=?", (agent_id,)
@@ -187,8 +199,8 @@ def add_version(agent_id: str, prompt: str, note: str) -> dict:
         next_number = (last["n"] or 0) + 1
         version_id = uuid.uuid4().hex[:12]
         conn.execute(
-            "INSERT INTO agent_versions (id, agent_id, version_number, prompt, note, created_at) VALUES (?,?,?,?,?,?)",
-            (version_id, agent_id, next_number, prompt, note, time.time()),
+            "INSERT INTO agent_versions (id, agent_id, version_number, prompt, note, plan, created_at) VALUES (?,?,?,?,?,?,?)",
+            (version_id, agent_id, next_number, prompt, note, json.dumps(plan) if plan else None, time.time()),
         )
         return {
             "id": version_id,
@@ -196,6 +208,7 @@ def add_version(agent_id: str, prompt: str, note: str) -> dict:
             "version_number": next_number,
             "prompt": prompt,
             "note": note,
+            "plan": json.dumps(plan) if plan else None,
         }
 
 

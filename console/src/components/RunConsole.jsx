@@ -122,8 +122,15 @@ export default function RunConsole({ jobId, onJobStarted, session, onSessionChan
                   {job.status.replace('_', ' ')}
                 </span>
                 <span className="run-steps mono">
-                  {job.steps_used ?? 0}/{job.max_steps ?? '—'} steps
+                  {job.mode === 'direct'
+                    ? `${job.steps_used ?? 0} steps`
+                    : `${job.steps_used ?? 0}/${job.max_steps ?? '—'} steps`}
                 </span>
+                {job.mode === 'direct' && (
+                  <span className="pill pill-done" title="This run executed the template's own tool calls. No model was involved, so it cost nothing to run.">
+                    no model
+                  </span>
+                )}
                 {active && (
                   <button type="button" className="btn btn-danger btn-sm" onClick={() => cancelTask(job.job_id).then(() => poll(job.job_id))}>
                     <IconStop /> Stop

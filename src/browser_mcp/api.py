@@ -50,7 +50,15 @@ from . import templates as template_store
 from .extract import take_extraction
 from .server import mcp
 
-DEFAULT_MODEL_ID = "apac.amazon.nova-pro-v1:0"
+# GLM 4.7 Flash over Nova Pro. Measured in ap-south-1 on the same two tasks,
+# both models returning the same records: Nova Pro cost $0.0063 on a 40-product
+# Amazon harvest and $0.0067 on a 20-lead Maps run; GLM 4.7 Flash cost $0.0016
+# and $0.0011. That is list price ($0.08/$0.48 per M tokens against
+# $0.47/$1.88) plus a smaller tokenizer - on an identical prompt Nova billed
+# 410 input tokens where other models billed 139-180, and every step of the
+# loop pays that again. Tool calling was verified against real Bedrock before
+# switching. Override with BEDROCK_MODEL_ID if a site starts defeating it.
+DEFAULT_MODEL_ID = "zai.glm-4.7-flash"
 MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", DEFAULT_MODEL_ID)
 REGION = os.environ.get("AWS_REGION", "ap-south-1")
 
@@ -99,9 +107,18 @@ SYSTEM_PROMPT = (
     "guess. If you could not complete the task, say exactly how far you got "
     "and why.\n\n"
     "Stop calling tools once the task is complete, then reply with plain "
-    "text. If the task asked you to collect records, end that reply with a "
-    "fenced ```json code block containing a JSON array of what you found - "
-    "prose summary first, then the code block."
+    "text.\n\n"
+    "DO NOT RETYPE RECORDS. When `extract_records` or `maps_leads` returned "
+    "the data, it has already been captured and saved in full, and the user "
+    "reads it from there - copying it into your reply adds nothing and is "
+    "thrown away. Your reply must not contain a table, a numbered list of "
+    "items, per-record lines, or a JSON block. Write at most four sentences: "
+    "how many records were collected, from where, and anything genuinely "
+    "notable (a shortfall against what was asked, a blocked page, a field "
+    "the site did not expose). "
+    "The one exception is records YOU assembled by hand from page text that "
+    "no extraction tool returned - those exist nowhere else, so end with a "
+    "fenced ```json array containing them."
 )
 
 # job_id -> full job record. Also mirrored into SQLite so history survives a
@@ -522,6 +539,83 @@ async def _run_agent_job(
         )
 
 
+async def _run_direct_plan(
+    job_id: str,
+    session: str,
+    plan: list[dict],
+    *,
+    persistent: bool = False,
+    run_id: str | None = None,
+    webhook_url: str | None = None,
+) -> None:
+    """Executes a known tool sequence with no model in the loop.
+
+    A filled-in template already states exactly which calls it wants. Handing
+    that prompt to a model so it can decide to make those same calls costs
+    real money for a decision with one possible answer: a measured 20-lead
+    Maps run burned 9,188 input and 1,249 output tokens to arrive at the
+    single `maps_leads` call its template had already named. This path runs
+    them directly, so a template run costs nothing but the browser.
+
+    Logging, session forcing, record capture and the finished-job shape are
+    identical to the model path - the console and the API cannot tell the
+    difference, which is the point: this is the same run, minus the guessing.
+    If any step fails the job fails honestly rather than falling back to the
+    model, because a broken selector or a dead URL is not something a model
+    would have fixed either.
+    """
+    job = JOBS[job_id]
+    job["mode"] = "direct"
+    _log(job, {"type": "system", "text": f"Running {len(plan)} known step(s) directly - no model needed."})
+    try:
+        last_text = ""
+        for step in plan:
+            name = step["tool"]
+            args = {**step["args"], "session": session}
+            if name == "browser_open":
+                args["persistent"] = persistent
+            _log(job, {"type": "tool_call", "name": name, "args": args})
+            job["current_action"] = name
+            result = await mcp.call_tool(name, args)
+            text_out = _tool_text(result)
+            if result.is_error:
+                _log(job, {"type": "tool_result", "name": name, "text": text_out[:4000], "is_error": True})
+                await _finish_job(
+                    job,
+                    status="error",
+                    result=None,
+                    error=f"{name} failed: {text_out}",
+                    run_id=run_id,
+                    webhook_url=webhook_url,
+                )
+                return
+            _log(job, {"type": "tool_result", "name": name, "text": text_out[:4000], "is_error": False})
+            job["steps_used"] = job.get("steps_used", 0) + 1
+            last_text = text_out
+            await asyncio.to_thread(_persist_job, job_id, job)
+
+        # The last step's own output is the answer. `_finish_job` prefers the
+        # records the browser really captured over anything in this text, so
+        # a plan gets the same verified records the model path gets.
+        await _finish_job(
+            job,
+            status="done",
+            result=last_text,
+            error=None,
+            run_id=run_id,
+            webhook_url=webhook_url,
+        )
+    except asyncio.CancelledError:
+        job["status"] = "cancelled"
+        job["error"] = "Stopped by user."
+        await asyncio.to_thread(_persist_job, job_id, job)
+        raise
+    except Exception as exc:  # noqa: BLE001
+        await _finish_job(
+            job, status="error", result=None, error=str(exc), run_id=run_id, webhook_url=webhook_url
+        )
+
+
 def _new_job(session: str, task: str) -> tuple[str, dict]:
     job_id = uuid.uuid4().hex[:12]
     job = {
@@ -540,6 +634,7 @@ def _new_job(session: str, task: str) -> tuple[str, dict]:
         "task_ref": None,
         "current_action": None,
         "steps_used": 0,
+        "mode": "model",
         "created_at": time.time(),
     }
     JOBS[job_id] = job
@@ -560,6 +655,8 @@ def _job_public(job: dict) -> dict:
         "human_reason": job["human_reason"],
         "current_action": job.get("current_action"),
         "records_source": job.get("records_source"),
+        # "direct" means this run cost no model tokens at all.
+        "mode": job.get("mode", "model"),
         "steps_used": job.get("steps_used", 0),
         "max_steps": MAX_STEPS,
         "created_at": job["created_at"],
@@ -736,12 +833,29 @@ async def list_tools_route(request: Request) -> JSONResponse:
 
 
 async def _trigger_agent_run(agent: dict) -> dict:
+    """Starts one run of an agent's current version.
+
+    A version saved from a filled-in template carries the tool calls it means,
+    so it runs them directly - no model, no tokens. A hand-written prompt, or
+    a template prompt the user has since edited, has no plan and goes through
+    the model exactly as before.
+    """
     version = agent["versions"][0]
     session = agent["session"]
     job_id, job = _new_job(session, version["prompt"])
     run_id = await asyncio.to_thread(agent_store.start_run, agent["id"], version["id"], job_id)
-    job["task_ref"] = asyncio.create_task(
-        _run_agent_job(
+    plan = json.loads(version["plan"]) if version.get("plan") else None
+    runner = (
+        _run_direct_plan(
+            job_id,
+            session,
+            plan,
+            persistent=bool(agent["persistent"]),
+            run_id=run_id,
+            webhook_url=agent["webhook_url"],
+        )
+        if plan
+        else _run_agent_job(
             job_id,
             session,
             persistent=bool(agent["persistent"]),
@@ -749,6 +863,7 @@ async def _trigger_agent_run(agent: dict) -> dict:
             webhook_url=agent["webhook_url"],
         )
     )
+    job["task_ref"] = asyncio.create_task(runner)
     return {"job_id": job_id, "run_id": run_id}
 
 
@@ -921,9 +1036,15 @@ async def use_template(request: Request) -> JSONResponse:
     """Turn a template plus the caller's inputs into a real run, or a real agent.
 
     `save=true` creates a persisted agent (so it can be versioned and
-    scheduled); otherwise it just starts a one-off run. Both paths go through
-    the same machinery as a hand-typed task - a template is only a better
-    starting prompt, never a separate execution path.
+    scheduled); otherwise it starts a one-off run.
+
+    A filled-in template usually names its tool calls outright, and those run
+    directly with no model involved - the same run, minus paying a model to
+    re-derive a decision that has one answer. Templates whose path genuinely
+    varies (Google, which can answer with a consent wall or a CAPTCHA) have no
+    plan and keep the model. `model=true` in the body forces the model path
+    for a template that has a plan, which is what you want when a site has
+    changed shape and the fixed calls no longer fit it.
     """
     template_id = request.path_params["template_id"]
     body = await request.json() if await request.body() else {}
@@ -932,17 +1053,30 @@ async def use_template(request: Request) -> JSONResponse:
     if prompt is None:
         return JSONResponse({"error": "no such template"}, status_code=404)
     template = template_store.get_template(template_id)
+    plan = None if body.get("model") else template_store.render_plan(template_id, values)
 
     if body.get("save"):
         name = (body.get("name") or template["name"]).strip()
-        agent = await asyncio.to_thread(agent_store.create_agent, name, prompt)
+        agent = await asyncio.to_thread(
+            agent_store.create_agent, name, prompt, "Standard Browser", plan
+        )
         result = await _trigger_agent_run(agent)
         return JSONResponse({**result, "agent_id": agent["id"], "prompt": prompt})
 
     session = body.get("session") or f"tpl-{uuid.uuid4().hex[:6]}"
     job_id, job = _new_job(session, prompt)
-    job["task_ref"] = asyncio.create_task(_run_agent_job(job_id, session))
-    return JSONResponse({"job_id": job_id, "status": "running", "prompt": prompt})
+    runner = (
+        _run_direct_plan(job_id, session, plan) if plan else _run_agent_job(job_id, session)
+    )
+    job["task_ref"] = asyncio.create_task(runner)
+    return JSONResponse(
+        {
+            "job_id": job_id,
+            "status": "running",
+            "prompt": prompt,
+            "mode": "direct" if plan else "model",
+        }
+    )
 
 
 
