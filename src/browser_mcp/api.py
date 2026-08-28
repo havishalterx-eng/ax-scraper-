@@ -595,6 +595,21 @@ async def _run_agent_job(
         )
 
 
+# Markers that indicate a page is asking a human to intervene. These are
+# phrases a consent wall or CAPTCHA actually displays, chosen to be specific
+# enough that ordinary listing or article text does not trigger them.
+HUMAN_HELP_MARKERS = (
+    "captcha",
+    "i'm not a robot",
+    "recaptcha",
+    "verify you are human",
+    "human verification",
+    "press & hold",
+    "cookie consent",
+    "before you continue",
+)
+
+
 async def _run_direct_plan(
     job_id: str,
     session: str,
@@ -620,29 +635,19 @@ async def _run_direct_plan(
     of failing outright; a plan that completes still costs no model tokens.
     """
 
-    async def _handover(step: dict, error_text: str) -> None:
-        """Move a failed direct run onto the model path."""
+    async def _handover(step: dict, mode: str, reason: str, model_note: str) -> None:
+        """Move a direct run onto the model path."""
         name = step["tool"]
-        job["mode"] = "fallback"
+        job["mode"] = mode
         job["status"] = "running"
         _log(
             job,
             {
                 "type": "system",
-                "text": (
-                    f"Direct step '{name}' failed: {error_text[:500]}. "
-                    "Continuing with the model."
-                ),
+                "text": f"{reason} Direct step '{name}' handing over to the model.",
             },
         )
-        failure_msg = (
-            f"The direct plan failed on step '{name}' with arguments "
-            f"{json.dumps(step['args'], sort_keys=True, default=str)}. "
-            f"Error: {error_text}\n"
-            "Continue the task using the model. Do not blindly repeat the same "
-            "failing call; inspect the page and adapt."
-        )
-        job["messages"].append({"role": "user", "content": [{"text": failure_msg}]})
+        job["messages"].append({"role": "user", "content": [{"text": model_note}]})
         job["current_action"] = None
         await asyncio.to_thread(_persist_job, job_id, job)
         await _run_agent_job(
@@ -659,6 +664,16 @@ async def _run_direct_plan(
     try:
         last_text = ""
         for step in plan:
+            if job["pending_messages"]:
+                await _handover(
+                    step,
+                    "promoted",
+                    f"{len(job['pending_messages'])} mid-run message(s) arrived.",
+                    "The direct run was promoted because the user sent a message mid-run. "
+                    "The user's message will be injected next; incorporate it into the task.",
+                )
+                return
+
             name = step["tool"]
             args = {**step["args"], "session": session}
             if name == "browser_open":
@@ -669,17 +684,54 @@ async def _run_direct_plan(
                 result = await mcp.call_tool(name, args)
             except Exception as exc:  # noqa: BLE001
                 detail = str(exc.__cause__) if exc.__cause__ else str(exc)
-                await _handover(step, detail)
+                failure_msg = (
+                    f"The direct plan failed on step '{name}' with arguments "
+                    f"{json.dumps(step['args'], sort_keys=True, default=str)}. "
+                    f"Error: {detail}\n"
+                    "Continue the task using the model. Do not blindly repeat the same "
+                    "failing call; inspect the page and adapt."
+                )
+                await _handover(step, "fallback", f"Direct step '{name}' failed: {detail[:500]}.", failure_msg)
                 return
             text_out = _tool_text(result)
             if result.is_error:
                 _log(job, {"type": "tool_result", "name": name, "text": text_out[:4000], "is_error": True})
-                await _handover(step, text_out)
+                failure_msg = (
+                    f"The direct plan failed on step '{name}' with arguments "
+                    f"{json.dumps(step['args'], sort_keys=True, default=str)}. "
+                    f"Error: {text_out}\n"
+                    "Continue the task using the model. Do not blindly repeat the same "
+                    "failing call; inspect the page and adapt."
+                )
+                await _handover(step, "fallback", f"Direct step '{name}' failed: {text_out[:500]}.", failure_msg)
                 return
             _log(job, {"type": "tool_result", "name": name, "text": text_out[:4000], "is_error": False})
+
+            lowered = text_out.lower()
+            for marker in HUMAN_HELP_MARKERS:
+                if marker in lowered:
+                    await _handover(
+                        step,
+                        "promoted",
+                        f"Detected human-help marker '{marker}'.",
+                        f"The page at direct step '{name}' appears to require human intervention "
+                        f"(matched '{marker}'). Continue the task using the model.",
+                    )
+                    return
+
             job["steps_used"] = job.get("steps_used", 0) + 1
             last_text = text_out
             await asyncio.to_thread(_persist_job, job_id, job)
+
+        if job["pending_messages"]:
+            await _handover(
+                step,
+                "promoted",
+                f"{len(job['pending_messages'])} mid-run message(s) arrived after the direct plan completed.",
+                "The direct plan completed, but the user sent a message before it finished. "
+                "The user's message will be injected next; incorporate it into the task.",
+            )
+            return
 
         # The last step's own output is the answer. `_finish_job` prefers the
         # records the browser really captured over anything in this text, so
