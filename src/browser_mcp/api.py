@@ -680,18 +680,27 @@ async def _run_agent_job(
 
 
 # Markers that indicate a page is asking a human to intervene. These are
-# phrases a consent wall or CAPTCHA actually displays, chosen to be specific
-# enough that ordinary listing or article text does not trigger them.
+# phrases a consent wall or CAPTCHA actually displays as its own text.
+#
+# Removed because ordinary page text can contain them, and a false positive
+# silently turns a free direct run into a paid model run:
+# - "captcha": pages discuss CAPTCHAs without serving one.
+# - "cookie consent" / "before you continue": privacy notices and help links
+#   use these phrases; they are not unique to blocking interstitials.
+# Measured across every templated direct plan on the current sites, none of
+# the removed markers fired. They are still too loose to keep.
 HUMAN_HELP_MARKERS = (
-    "captcha",
     "i'm not a robot",
     "recaptcha",
     "verify you are human",
     "human verification",
     "press & hold",
-    "cookie consent",
-    "before you continue",
+    "complete the security check",
 )
+
+# Consent walls and CAPTCHAs speak at the top of the page. Scanning a deep
+# 6,000-character dump finds marker words in ordinary footer text by accident.
+_HUMAN_HELP_SCAN_CHARS = 1500
 
 _HARVEST_TOOLS = {"extract_records", "maps_leads"}
 _HARVEST_RECORD_RE = re.compile(
@@ -737,18 +746,16 @@ async def _run_direct_plan(
     of failing outright; a plan that completes still costs no model tokens.
     """
 
-    async def _handover(step: dict, mode: str, reason: str, model_note: str) -> None:
+    async def _handover(step: dict | None, mode: str, reason: str, model_note: str) -> None:
         """Move a direct run onto the model path."""
-        name = step["tool"]
+        name = step["tool"] if step else None
         job["mode"] = mode
         job["status"] = "running"
-        _log(
-            job,
-            {
-                "type": "system",
-                "text": f"{reason} Direct step '{name}' handing over to the model.",
-            },
-        )
+        if name:
+            handover_text = f"{reason} Direct step '{name}' handing over to the model."
+        else:
+            handover_text = f"{reason} Direct plan completed; handing over to the model."
+        _log(job, {"type": "system", "text": handover_text})
         job["messages"].append({"role": "user", "content": [{"text": model_note}]})
         job["current_action"] = None
         await asyncio.to_thread(_persist_job, job_id, job)
@@ -809,7 +816,7 @@ async def _run_direct_plan(
                 return
             _log(job, {"type": "tool_result", "name": name, "text": text_out[:4000], "is_error": False})
 
-            lowered = text_out.lower()
+            lowered = text_out[:_HUMAN_HELP_SCAN_CHARS].lower()
             for marker in HUMAN_HELP_MARKERS:
                 if marker in lowered:
                     await _handover(
@@ -827,7 +834,7 @@ async def _run_direct_plan(
 
         if job["pending_messages"]:
             await _handover(
-                step,
+                None,
                 "promoted",
                 f"{len(job['pending_messages'])} mid-run message(s) arrived after the direct plan completed.",
                 "The direct plan completed, but the user sent a message before it finished. "
