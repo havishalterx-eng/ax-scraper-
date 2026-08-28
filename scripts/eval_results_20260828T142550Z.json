@@ -1,0 +1,239 @@
+{
+  "date": "2026-08-28T14:12:26.532036+00:00",
+  "models": [
+    "zai.glm-4.7-flash",
+    "apac.amazon.nova-lite-v1:0"
+  ],
+  "price_table": {
+    "zai.glm-4.7-flash": {
+      "input": 0.08,
+      "output": 0.48
+    },
+    "amazon.nova-pro-v1:0": {
+      "input": 0.47,
+      "output": 1.88
+    },
+    "amazon.nova-lite-v1:0": {
+      "input": 0.036,
+      "output": 0.284
+    },
+    "amazon.nova-micro-v1:0": {
+      "input": 0.021,
+      "output": 0.082
+    },
+    "qwen.qwen3-235b-a22b-2507-v1:0": {
+      "input": 0.26,
+      "output": 1.04
+    }
+  },
+  "model_results": [
+    {
+      "model": "zai.glm-4.7-flash",
+      "results": [
+        {
+          "task": "20-lead Maps",
+          "prompt": "Find beauty salons in Kondapur Hyderabad and give me 20 of them with which ones have no website.",
+          "expected_records": 20,
+          "status": "done",
+          "error": null,
+          "records": 20,
+          "records_source": "extracted",
+          "steps_used": 1,
+          "input_tokens": 6203,
+          "output_tokens": 197,
+          "cost_usd": 0.000591,
+          "wall_seconds": 67.03,
+          "success": true,
+          "result_preview": "I found 20 beauty salons in Kondapur, Hyderabad. Six of them don't have a working website:\n\n1. **Revolution The Unisex Salon Factory** \u2014 No website\n2. **De Studio | Salon & Beauty - Kondapur** \u2014 Social page only (Instagram)\n3. **Skin Miracle Unisex Salon** \u2014 Social page only (Instagram)\n4. **Define Salons** \u2014 Directory listing only\n5. **The Glossy Looks** \u2014 Website exists but is broken\n6. **Alpha Unisex Salon** \u2014 Website exists but returns 404\n\nThe remaining 14 salons have live, working websites"
+        },
+        {
+          "task": "40-product Amazon",
+          "prompt": "Go to https://www.amazon.in/s?k=wireless+headphones and collect 40 products with price, rating, review count and URL.",
+          "expected_records": 40,
+          "status": "done",
+          "error": null,
+          "records": 40,
+          "records_source": "extracted",
+          "steps_used": 2,
+          "input_tokens": 13772,
+          "output_tokens": 105,
+          "cost_usd": 0.001152,
+          "wall_seconds": 9.47,
+          "success": true,
+          "result_preview": "Extracted 40 wireless headphone products from Amazon.in search results, with pricing, ratings, review counts, URLs, and availability."
+        },
+        {
+          "task": "Hacker News newest",
+          "prompt": "Go to https://news.ycombinator.com/newest and collect 15 titles with links.",
+          "expected_records": 15,
+          "status": "done",
+          "error": null,
+          "records": 15,
+          "records_source": "extracted",
+          "steps_used": 2,
+          "input_tokens": 11738,
+          "output_tokens": 64,
+          "cost_usd": 0.00097,
+          "wall_seconds": 2.36,
+          "success": true,
+          "result_preview": "Collected 15 titles with links from the Hacker News newest page. Recorded fields included title and corresponding URL for each entry."
+        },
+        {
+          "task": "Reddit r/programming hot",
+          "prompt": "Go to https://www.reddit.com/r/programming/hot/ and collect 25 posts with title and URL.",
+          "expected_records": 25,
+          "status": "error",
+          "error": "timed out after 300s",
+          "records": 0,
+          "records_source": null,
+          "steps_used": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost_usd": 0.0,
+          "wall_seconds": 300,
+          "success": false,
+          "result_preview": ""
+        },
+        {
+          "task": "HN top story QA",
+          "prompt": "Tell me the title of the top story on Hacker News right now.",
+          "expected_records": 0,
+          "status": "done",
+          "error": null,
+          "records": 0,
+          "records_source": null,
+          "steps_used": 1,
+          "input_tokens": 6526,
+          "output_tokens": 31,
+          "cost_usd": 0.000537,
+          "wall_seconds": 2.17,
+          "success": true,
+          "result_preview": "\"IT WoRKs BeTTER in the App \""
+        },
+        {
+          "task": "LinkedIn hard case",
+          "prompt": "Go to https://www.linkedin.com/jobs/search/?keywords=prompt%20engineer and collect 30 job listings with company name and location.",
+          "expected_records": 30,
+          "status": "done",
+          "error": null,
+          "records": 30,
+          "records_source": "extracted",
+          "steps_used": 2,
+          "input_tokens": 12836,
+          "output_tokens": 119,
+          "cost_usd": 0.001084,
+          "wall_seconds": 3.02,
+          "success": true,
+          "result_preview": "I've collected 30 prompt engineer job listings from LinkedIn's job search page. The records are already available for download and include both job titles and URLs. LinkedIn shows over 10,000+ open positions for prompt engineer and related roles in the United States based on the search query used."
+        }
+      ],
+      "total_cost_usd": 0.004334,
+      "successes": 5,
+      "tasks_run": 6
+    },
+    {
+      "model": "apac.amazon.nova-lite-v1:0",
+      "results": [
+        {
+          "task": "20-lead Maps",
+          "prompt": "Find beauty salons in Kondapur Hyderabad and give me 20 of them with which ones have no website.",
+          "expected_records": 20,
+          "status": "done",
+          "error": null,
+          "records": 20,
+          "records_source": "extracted",
+          "steps_used": 1,
+          "input_tokens": 6652,
+          "output_tokens": 200,
+          "cost_usd": 0.000296,
+          "wall_seconds": 66.32,
+          "success": true,
+          "result_preview": "<thinking>The tool has collected 20 beauty salon listings in Kondapur, Hyderabad, and identified which ones have no working website. The breakdown shows that 6 salons have no website. The task is complete, and the information can be reported to the User.</thinking>\n\n6 beauty salons in Kondapur, Hyderabad, have no website. One of them is Revolution The Unisex Salon Factory, which has no website on the listing."
+        },
+        {
+          "task": "40-product Amazon",
+          "prompt": "Go to https://www.amazon.in/s?k=wireless+headphones and collect 40 products with price, rating, review count and URL.",
+          "expected_records": 40,
+          "status": "done",
+          "error": null,
+          "records": 40,
+          "records_source": "extracted",
+          "steps_used": 1,
+          "input_tokens": 10187,
+          "output_tokens": 163,
+          "cost_usd": 0.000413,
+          "wall_seconds": 9.04,
+          "success": true,
+          "result_preview": "Extracted 40 records from the Amazon search results for wireless headphones. Each record contains the title, URL, price, rating, and review count. The availability of each product is also noted as being in stock."
+        },
+        {
+          "task": "Hacker News newest",
+          "prompt": "Go to https://news.ycombinator.com/newest and collect 15 titles with links.",
+          "expected_records": 15,
+          "status": "done",
+          "error": null,
+          "records": 15,
+          "records_source": "extracted",
+          "steps_used": 1,
+          "input_tokens": 8073,
+          "output_tokens": 114,
+          "cost_usd": 0.000323,
+          "wall_seconds": 2.88,
+          "success": true,
+          "result_preview": "Collected 15 titles and links from the newest articles on Hacker News. All titles and links have been saved automatically and are available for download."
+        },
+        {
+          "task": "Reddit r/programming hot",
+          "prompt": "Go to https://www.reddit.com/r/programming/hot/ and collect 25 posts with title and URL.",
+          "expected_records": 25,
+          "status": "error",
+          "error": "timed out after 300s",
+          "records": 0,
+          "records_source": null,
+          "steps_used": 0,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost_usd": 0.0,
+          "wall_seconds": 300,
+          "success": false,
+          "result_preview": ""
+        },
+        {
+          "task": "HN top story QA",
+          "prompt": "Tell me the title of the top story on Hacker News right now.",
+          "expected_records": 0,
+          "status": "done",
+          "error": null,
+          "records": 1,
+          "records_source": "extracted",
+          "steps_used": 1,
+          "input_tokens": 7503,
+          "output_tokens": 191,
+          "cost_usd": 0.000324,
+          "wall_seconds": 3.6,
+          "success": false,
+          "result_preview": "<thinking>The `extract_records` tool has successfully extracted the title of the top story on Hacker News. The title is \"IT WoRKs BeTter in the App \" and it is from the website shkspr.mobi. There were no notable issues during the extraction process.</thinking>\n\nThe top story on Hacker News right now is titled \"IT WoRKs BeTter in the App \" and it is from the website shkspr.mobi."
+        },
+        {
+          "task": "LinkedIn hard case",
+          "prompt": "Go to https://www.linkedin.com/jobs/search/?keywords=prompt%20engineer and collect 30 job listings with company name and location.",
+          "expected_records": 30,
+          "status": "done",
+          "error": null,
+          "records": 29,
+          "records_source": "extracted",
+          "steps_used": 1,
+          "input_tokens": 9213,
+          "output_tokens": 143,
+          "cost_usd": 0.000372,
+          "wall_seconds": 5.53,
+          "success": false,
+          "result_preview": "I collected 29 job listings for \"Prompt Engineer\" on LinkedIn. The results include the job title and the company name, but the location information was not available on the page. All 29 records have been saved and are available for download."
+        }
+      ],
+      "total_cost_usd": 0.001728,
+      "successes": 3,
+      "tasks_run": 6
+    }
+  ]
+}
