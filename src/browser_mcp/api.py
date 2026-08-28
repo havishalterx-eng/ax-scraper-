@@ -35,6 +35,7 @@ from pathlib import Path
 
 import boto3
 import httpx
+from botocore.exceptions import ClientError
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
@@ -60,7 +61,23 @@ from .server import mcp
 # switching. Override with BEDROCK_MODEL_ID if a site starts defeating it.
 DEFAULT_MODEL_ID = "zai.glm-4.7-flash"
 MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", DEFAULT_MODEL_ID)
+
+# Nova Pro is the fallback because the production IAM policy for
+# ax-scraper-bedrock already permits it, it supports the same tool-use loop,
+# and it lives in a different capacity pool from GLM 4.7 Flash. Override with
+# BEDROCK_FALLBACK_MODEL_ID if that changes.
+FALLBACK_MODEL_ID = os.environ.get("BEDROCK_FALLBACK_MODEL_ID", "apac.amazon.nova-pro-v1:0")
+
 REGION = os.environ.get("AWS_REGION", "ap-south-1")
+
+# Bedrock errors that mean the model or region is temporarily unavailable.
+# A different model can fix these; permission or validation errors cannot.
+FAILOVER_ERROR_CODES = (
+    "ThrottlingException",
+    "ServiceUnavailableException",
+    "ModelNotReadyException",
+    "ModelTimeoutException",
+)
 
 # A real harvest is many steps: navigate, maybe search, scroll, extract, and
 # retry when a page loads slowly. The old value of 15 was set before
@@ -482,14 +499,34 @@ async def _run_agent_job(
             if _compact_messages(messages):
                 _log(job, {"type": "system", "text": "Compacted older context to stay within the model's input limit."})
 
-            resp = await asyncio.to_thread(
-                bedrock.converse,
-                modelId=MODEL_ID,
-                system=[{"text": SYSTEM_PROMPT}],
-                messages=messages,
-                toolConfig=tool_config,
-                inferenceConfig={"maxTokens": MAX_REPLY_TOKENS},
-            )
+            while True:
+                try:
+                    resp = await asyncio.to_thread(
+                        bedrock.converse,
+                        modelId=job["model_id"],
+                        system=[{"text": SYSTEM_PROMPT}],
+                        messages=messages,
+                        toolConfig=tool_config,
+                        inferenceConfig={"maxTokens": MAX_REPLY_TOKENS},
+                    )
+                    break
+                except ClientError as exc:
+                    code = exc.response.get("Error", {}).get("Code")
+                    if code in FAILOVER_ERROR_CODES and job["model_id"] != FALLBACK_MODEL_ID:
+                        _log(
+                            job,
+                            {
+                                "type": "system",
+                                "text": (
+                                    f"Bedrock returned {code} for {job['model_id']}; "
+                                    f"failing over to {FALLBACK_MODEL_ID}."
+                                ),
+                            },
+                        )
+                        job["model_id"] = FALLBACK_MODEL_ID
+                        await asyncio.to_thread(_persist_job, job_id, job)
+                        continue
+                    raise
             out_message = resp["output"]["message"]
             messages.append(out_message)
 
@@ -774,6 +811,7 @@ def _new_job(session: str, task: str) -> tuple[str, dict]:
         "current_action": None,
         "steps_used": 0,
         "mode": "model",
+        "model_id": MODEL_ID,
         "created_at": time.time(),
     }
     JOBS[job_id] = job
@@ -796,6 +834,7 @@ def _job_public(job: dict) -> dict:
         "records_source": job.get("records_source"),
         # "direct" means this run cost no model tokens at all.
         "mode": job.get("mode", "model"),
+        "model": job.get("model_id", MODEL_ID),
         "steps_used": job.get("steps_used", 0),
         "max_steps": MAX_STEPS,
         "created_at": job["created_at"],
