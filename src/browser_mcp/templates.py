@@ -9,7 +9,9 @@ is the default rather than something you have to discover.
 
 Every prompt here has been shaped around what the tools actually do well:
 point at a listing URL, let `extract_records` harvest and paginate. Nothing
-here is a stub - each one creates a real agent that runs.
+here is a stub - each one creates a real agent that runs, and a template whose
+site stops answering is removed rather than left to fail: eBay and Reddit both
+went that way, and a template that cannot succeed is worse than a missing one.
 
 Most also carry a `direct` plan: the exact tool calls the prompt is asking
 for. When every input is filled, those calls are known before the run starts,
@@ -101,24 +103,6 @@ TEMPLATES: list[dict] = [
             {"tool": "extract_records", "args": {"limit": "{count}"}},
         ],
         "est_steps": "2-3 steps",
-    },
-    {
-        "id": "ebay-search",
-        "name": "eBay Search Scraper",
-        "category": "E-commerce",
-        "site": "eBay",
-        "accent": "#E53238",
-        "description": "Collect eBay listings for a search term with prices, conditions and source URLs.",
-        "inputs": [
-            {"key": "query", "label": "Search term", "default": "mechanical keyboard"},
-            {"key": "count", "label": "How many listings", "default": "50"},
-        ],
-        "prompt": "Go to https://www.ebay.com/sch/i.html?_nkw={query_plus} and call extract_records with limit {count} to collect the listing titles, prices and source URLs.",
-        "direct": [
-            {"tool": "browser_open", "args": {"url": "https://www.ebay.com/sch/i.html?_nkw={query_plus}"}},
-            {"tool": "extract_records", "args": {"limit": "{count}"}},
-        ],
-        "est_steps": "2-4 steps",
     },
     {
         "id": "producthunt",

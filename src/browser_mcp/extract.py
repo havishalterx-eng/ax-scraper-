@@ -221,6 +221,13 @@ _WALL_TEXT_SNIPPETS = (
     "sign in to continue",
     "are you a robot",
     "verify you are human",
+    # Bot interstitials. Observed on eBay, which serves "Pardon Our
+    # Interruption... Checking your browser before you access eBay" on its
+    # category pages and an error page on search. These are their own wording,
+    # not phrases an ordinary listing page uses.
+    "pardon our interruption",
+    "checking your browser before you access",
+    "enable javascript and cookies to continue",
 )
 
 
@@ -240,12 +247,34 @@ def wall_message(url: str) -> str:
     )
 
 
+def wall_url(url: str) -> bool:
+    """True if the URL itself is a wall's address.
+
+    Kept separate from the body check because the two mean different things.
+    A wall's URL is only evidence when the page was *sent* somewhere else and
+    ended up here - that is interception. Someone who deliberately opens a
+    sign-in page has not been intercepted, and telling them their login page
+    is a login page hides the form they came to fill in.
+    """
+    lowered = url.lower()
+    return any(snippet in lowered for snippet in _WALL_URL_SNIPPETS)
+
+
+def wall_body(body_text: str) -> bool:
+    """True if the page is telling the reader it is a wall.
+
+    This one always counts. A bot interstitial is served at the address you
+    asked for - eBay answers its own category URL with "Pardon Our
+    Interruption" - so there is no redirect to notice, and nobody navigates to
+    one on purpose.
+    """
+    lowered = body_text.lower()
+    return any(snippet in lowered for snippet in _WALL_TEXT_SNIPPETS)
+
+
 def looks_like_wall(url: str, body_text: str) -> bool:
-    lowered_url = url.lower()
-    if any(snippet in lowered_url for snippet in _WALL_URL_SNIPPETS):
-        return True
-    lowered_text = body_text.lower()
-    return any(snippet in lowered_text for snippet in _WALL_TEXT_SNIPPETS)
+    """Either kind of signal. For callers already on a page that gave nothing."""
+    return wall_url(url) or wall_body(body_text)
 
 
 # session name -> the records from that session's most recent extract_records.

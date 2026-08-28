@@ -10,7 +10,9 @@ from .verify import verify_websites
 from .extract import (
     EXTRACT_JS,
     looks_like_wall,
+    wall_body,
     wall_message,
+    wall_url,
     dedupe_records,
     format_records,
     next_page_url,
@@ -98,12 +100,15 @@ async def _current_state(session: str, requested_url: str | None = None) -> str:
         data = await _read_state_once(page)
         if isinstance(data, str):
             return data
-    if requested_url and page.url != requested_url:
+    if requested_url:
         try:
             body_text = await page.inner_text("body")
         except Exception:  # noqa: BLE001 - a body read is a diagnostic, never the answer
             body_text = ""
-        if looks_like_wall(page.url, body_text[:2000]):
+        # The body always counts: an interstitial is served at the address you
+        # asked for. The URL only counts when the page moved, so opening a
+        # sign-in page on purpose still returns its form.
+        if wall_body(body_text[:2000]) or (page.url != requested_url and wall_url(page.url)):
             return wall_message(page.url)
     return format_state(data)
 
