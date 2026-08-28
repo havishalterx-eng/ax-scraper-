@@ -82,25 +82,6 @@ TEMPLATES: list[dict] = [
         "est_steps": "1-2 steps",
     },
     {
-        "id": "reddit-posts",
-        "name": "Reddit Posts Scraper",
-        "category": "Social media",
-        "site": "Reddit",
-        "accent": "#FF4500",
-        "description": "Pull the current posts from any subreddit with titles, scores, comment counts and permalinks.",
-        "inputs": [
-            {"key": "subreddit", "label": "Subreddit", "default": "programming"},
-            {"key": "sort", "label": "Sort by", "default": "hot"},
-            {"key": "count", "label": "How many posts", "default": "30"},
-        ],
-        "prompt": "Go to https://old.reddit.com/r/{subreddit}/{sort}/ and call extract_records with limit {count} to collect the post titles, scores, comment counts and links. Use old.reddit.com - its markup is far easier to extract than the new interface.",
-        "direct": [
-            {"tool": "browser_open", "args": {"url": "https://old.reddit.com/r/{subreddit}/{sort}/"}},
-            {"tool": "extract_records", "args": {"limit": "{count}"}},
-        ],
-        "est_steps": "2-5 steps",
-    },
-    {
         "id": "hn-frontpage",
         "name": "Hacker News Front Page",
         "category": "Research",

@@ -200,6 +200,38 @@ EXTRACT_JS = r"""
 import re
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
+# Sign-in or verification walls that extract_records can land on. These are
+# literal signals, not a heuristic score: a URL that redirects here means the
+# site will not show listings without a logged-in session or a human clearing
+# a challenge. The prompt says to retry elsewhere, which burns the step budget
+# on a page that cannot yield records.
+_WALL_URL_SNIPPETS = (
+    "?reason=lor2",  # observed Reddit old.reddit.com redirect to /login
+    "/login?",       # explicit login path (e.g. reddit.com/login?dest=...)
+    "/login/",
+    "/signin",
+    "/auth?",
+    "challenges.cloudflare.com",
+    "cf-im-under-attack",
+    "captcha",
+)
+_WALL_TEXT_SNIPPETS = (
+    "you've been blocked by network security",
+    "log in to continue",
+    "sign in to continue",
+    "are you a robot",
+    "verify you are human",
+)
+
+
+def _looks_like_wall(url: str, body_text: str) -> bool:
+    lowered_url = url.lower()
+    if any(snippet in lowered_url for snippet in _WALL_URL_SNIPPETS):
+        return True
+    lowered_text = body_text.lower()
+    return any(snippet in lowered_text for snippet in _WALL_TEXT_SNIPPETS)
+
+
 # session name -> the records from that session's most recent extract_records.
 #
 # This exists because the model is a lossy pipe for bulk data. A real run where

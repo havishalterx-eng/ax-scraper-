@@ -9,6 +9,7 @@ from .maps import COLLECT_PLACES_JS, PLACE_DETAIL_JS, SCROLL_FEED_JS, format_lea
 from .verify import verify_websites
 from .extract import (
     EXTRACT_JS,
+    _looks_like_wall,
     dedupe_records,
     format_records,
     next_page_url,
@@ -215,6 +216,16 @@ async def extract_records(
         if len(all_records) >= limit:
             break
         if not batch:
+            if page_index == 1:
+                body_text = await page.inner_text("body")
+                if _looks_like_wall(page.url, body_text[:2000]):
+                    return (
+                        f"url={page.url}\n\n"
+                        "This page is a sign-in or security wall, not a listing page. "
+                        "The site requires a logged-in session or human verification before it will show results. "
+                        "Repeating extraction, scrolling, or navigating elsewhere on this page will not help. "
+                        "Use a signed-in session (browser_open with persistent=True) or call request_human_help."
+                    )
             notes.append(f"Page {page_index} had no records; stopped.")
             break
         # A site that ignores an out-of-range page number re-serves the page
