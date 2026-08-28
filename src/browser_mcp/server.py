@@ -33,10 +33,58 @@ def _normalize_url(url: str) -> str:
     return url
 
 
+_DESTROYED_CONTEXT = "Execution context was destroyed"
+
+
+def _wall_message(url: str) -> str:
+    return (
+        f"url={url}\n\n"
+        "This page is a sign-in or security wall, not a listing page. "
+        "The site requires a logged-in session or human verification before it will show results. "
+        "Repeating extraction, scrolling, or navigating elsewhere on this page will not help. "
+        "Use a signed-in session (browser_open with persistent=True) or call request_human_help."
+    )
+
+
+def _redirect_message(page, cause: Exception) -> str:
+    return (
+        f"url={page.url}\n\n"
+        "The page redirected while it was being read. "
+        f"Cause: {cause}. "
+        "If the current URL is useful, navigate to it directly; if it is a login or verification wall, use a signed-in session or request human help."
+    )
+
+
+async def _read_state_once(page):
+    """Read the indexed page state, retrying once if a redirect tore the context down.
+
+    Playwright raises "Execution context was destroyed" when `page.evaluate` is
+    in flight and the page navigates. That is not a real failure of the tool;
+    it just means the page settled somewhere else. One retry on the new page is
+    enough; a loop would spin on a redirect cycle.
+    """
+    try:
+        return await page.evaluate(STATE_JS)
+    except Exception as exc:  # noqa: BLE001
+        if _DESTROYED_CONTEXT not in str(exc):
+            raise
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:  # noqa: BLE001
+            await page.wait_for_timeout(1500)
+        try:
+            return await page.evaluate(STATE_JS)
+        except Exception as exc2:  # noqa: BLE001
+            return _redirect_message(page, exc2)
+
+
 async def _current_state(session: str) -> str:
     browser_session = await manager.get(session)
     page = await browser_session.ensure_page()
-    data = await page.evaluate(STATE_JS)
+    data = await _read_state_once(page)
+    if isinstance(data, str):
+        # _read_state_once returned a human-readable redirect message.
+        return data
     # `domcontentloaded` fires before a script-rendered page has painted
     # anything clickable, so a scan right after navigation can legitimately
     # find zero elements on a site that is full of them - seen for real on
@@ -47,7 +95,12 @@ async def _current_state(session: str) -> str:
             await page.wait_for_load_state("networkidle", timeout=4000)
         except Exception:  # noqa: BLE001 - busy pages may never go idle; retry anyway
             await page.wait_for_timeout(1200)
-        data = await page.evaluate(STATE_JS)
+        data = await _read_state_once(page)
+        if isinstance(data, str):
+            return data
+    body_text = await page.inner_text("body")
+    if looks_like_wall(page.url, body_text[:2000]):
+        return _wall_message(page.url)
     return format_state(data)
 
 
