@@ -69,10 +69,18 @@ REGION = os.environ.get("AWS_REGION", "ap-south-1")
 # multi-page harvest legitimately needs dozens of steps.
 MAX_STEPS = int(os.environ.get("MAX_STEPS", "60"))
 
+# Ceiling on a single model reply. Tool calls need a few dozen tokens and a
+# four-sentence summary needs a few hundred, so this only ever bites when the
+# model ignores the "do not retype records" rule - which it does
+# inconsistently: the same Maps task produced 437 output tokens on one run and
+# 2,400 on another, the difference being a reprint of records already captured
+# server-side. Output is the expensive side of the bill, so the waste is
+# capped rather than left to the model's mood.
+MAX_REPLY_TOKENS = int(os.environ.get("MAX_REPLY_TOKENS", "2048"))
+
 SYSTEM_PROMPT = (
     "You control a real web browser through tools. This run is pinned to one "
-    "fixed browser session for its whole duration - don't worry about the "
-    "`session` argument on any tool, it's filled in for you automatically. "
+    "fixed browser session for its whole duration. "
     "The session may already have a page open from a previous step; if a "
     "tool result already shows a loaded page, work from that instead of "
     "assuming you need to open one.\n\n"
@@ -266,18 +274,65 @@ def _salvage_json_array(raw: str) -> list | None:
     return objects or None
 
 
+# Arguments the model never needs to see. `session` is forced onto every call
+# so a job cannot wander onto another job's browser, and `persistent` comes
+# from the agent's own settings - showing them costs schema tokens on every
+# step and offers only a way to get them wrong.
+#
+# `selector` is hidden for a different reason, found by watching a real run:
+# with the long docstring trimmed away, the model started guessing CSS
+# selectors ("table span.titleline a") that matched nothing, turning a
+# two-step Hacker News harvest into five steps of failed extractions. The
+# auto-detection is what works and is what every template relies on, so the
+# default is left to stand.
+HIDDEN_ARGS = ("session", "persistent", "selector")
+
+
+def _tool_summary(description: str) -> str:
+    """The first paragraph of a tool's docstring.
+
+    The full docstrings are written for a person reading the code and for MCP
+    clients like Claude Desktop, and they repeat steering that SYSTEM_PROMPT
+    already gives this loop - when to prefer `maps_leads`, that
+    `extract_records` paginates by itself, not to re-use a stale element
+    index. Paying for both on every step buys nothing, so Bedrock gets the
+    summary and the system prompt keeps the steering.
+    """
+    return (description or "").strip().split("\n\n", 1)[0].strip()
+
+
 async def _mcp_tools_to_bedrock() -> list[dict]:
+    """Tool schemas as Bedrock wants them, trimmed to what the model decides.
+
+    Measured: the untrimmed set was 2,571 tokens resent on every step, against
+    a system prompt of ~640. Descriptions carry most of it, and the forced
+    arguments carry the rest.
+    """
     tools = await mcp.list_tools()
-    return [
-        {
-            "toolSpec": {
-                "name": t.name,
-                "description": t.description or "",
-                "inputSchema": {"json": t.input_schema or {"type": "object", "properties": {}}},
-            }
+    specs = []
+    for t in tools:
+        schema = dict(t.input_schema or {"type": "object", "properties": {}})
+        properties = {
+            name: value
+            for name, value in (schema.get("properties") or {}).items()
+            if name not in HIDDEN_ARGS
         }
-        for t in tools
-    ]
+        schema["properties"] = properties
+        required = [r for r in schema.get("required", []) if r not in HIDDEN_ARGS]
+        if required:
+            schema["required"] = required
+        else:
+            schema.pop("required", None)
+        specs.append(
+            {
+                "toolSpec": {
+                    "name": t.name,
+                    "description": _tool_summary(t.description),
+                    "inputSchema": {"json": schema},
+                }
+            }
+        )
+    return specs
 
 
 def _log(job: dict, entry: dict) -> None:
@@ -433,6 +488,7 @@ async def _run_agent_job(
                 system=[{"text": SYSTEM_PROMPT}],
                 messages=messages,
                 toolConfig=tool_config,
+                inferenceConfig={"maxTokens": MAX_REPLY_TOKENS},
             )
             out_message = resp["output"]["message"]
             messages.append(out_message)
