@@ -442,9 +442,12 @@ async def _finish_job(
         job["structured_result"] = model_records
         job["records_source"] = "model" if model_records else None
 
+    if not job["structured_result"] and job.get("capture_guard_note"):
+        job["result"] = job["capture_guard_note"]
+
     structured = json.dumps(job["structured_result"]) if job["structured_result"] else None
     job["error"] = error
-    if result:
+    if job.get("result"):
         _log(job, {"type": "final", "text": job["result"]})
 
     if run_id:
@@ -540,6 +543,50 @@ async def _run_agent_job(
                 # final answer, keep going instead of dropping their message.
                 if job["pending_messages"]:
                     continue
+
+                captured = take_extraction(session)
+                captured_records = captured["records"] if captured else None
+                _, model_structured = _extract_structured(final_text)
+
+                if (
+                    not job.get("capture_guard_fired")
+                    and _harvest_reported_records(job["log"])
+                    and not captured_records
+                    and not model_structured
+                ):
+                    _log(
+                        job,
+                        {
+                            "type": "system",
+                            "text": (
+                                "Harvest tool reported records but none were captured server-side. "
+                                "Asking the model to output them as JSON."
+                            ),
+                        },
+                    )
+                    job["messages"].append(
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "text": (
+                                        "The harvest tool reported records, but they were not captured "
+                                        "server-side. Output the records now as a fenced JSON array. "
+                                        "Do not describe them; output only the JSON block."
+                                    )
+                                }
+                            ],
+                        }
+                    )
+                    job["capture_guard_fired"] = True
+                    await asyncio.to_thread(_persist_job, job_id, job)
+                    continue
+
+                if job.get("capture_guard_fired") and not captured_records and not model_structured:
+                    job["capture_guard_note"] = (
+                        "The harvest tool reported records, but they could not be recovered."
+                    )
+
                 await _finish_job(
                     job,
                     status="done",
@@ -645,6 +692,24 @@ HUMAN_HELP_MARKERS = (
     "cookie consent",
     "before you continue",
 )
+
+_HARVEST_TOOLS = {"extract_records", "maps_leads"}
+_HARVEST_RECORD_RE = re.compile(
+    r"(?:Extracted|Collected)\s+([1-9]\d*)\s+(?:records|Google Maps listings)", re.IGNORECASE
+)
+
+
+def _harvest_reported_records(log: list[dict]) -> bool:
+    """True if a harvest tool returned a positive record count in this run."""
+    for entry in log:
+        if (
+            entry.get("type") == "tool_result"
+            and entry.get("name") in _HARVEST_TOOLS
+            and not entry.get("is_error")
+            and _HARVEST_RECORD_RE.search(entry.get("text", ""))
+        ):
+            return True
+    return False
 
 
 async def _run_direct_plan(
@@ -832,6 +897,7 @@ def _job_public(job: dict) -> dict:
         "human_reason": job["human_reason"],
         "current_action": job.get("current_action"),
         "records_source": job.get("records_source"),
+        "capture_guard_note": job.get("capture_guard_note"),
         # "direct" means this run cost no model tokens at all.
         "mode": job.get("mode", "model"),
         "model": job.get("model_id", MODEL_ID),
