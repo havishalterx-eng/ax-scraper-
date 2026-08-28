@@ -9,7 +9,12 @@
 # DNS setup. Swap it for a real subdomain (say scraper.alterx.co.in, pointed
 # here with an A record) by changing this one line - nothing else needs to
 # know the difference.
-13-206-203-227.nip.io {
+#
+# The address is a Lightsail static IP, deliberately. The first box used the
+# instance's own public IP, which a stop/start reassigns - so the one recovery
+# step for an unresponsive box was also the step that would have silently
+# broken this hostname, the Vercel rewrite and the deploy target at once.
+3-7-135-185.nip.io {
 	# `app` is the API container on the shared Docker network. Addressing it
 	# by name rather than by published port keeps the backend off the public
 	# interface entirely once port 8000 is closed.

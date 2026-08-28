@@ -29,8 +29,10 @@
 # Usage: ./deploy.sh
 set -euo pipefail
 
-HOST="ubuntu@13.206.203.227"
-KEY="$HOME/.ssh/browser-mcp-lightsail.pem"
+# Static IP, not the instance's own public address: a stop/start reassigns the
+# latter, and rebooting is exactly what you do when the box stops answering.
+HOST="ubuntu@3.7.135.185"
+KEY="$HOME/.ssh/ax-scraper-lightsail.pem"
 
 ssh -i "$KEY" "$HOST" '
   set -euo pipefail
