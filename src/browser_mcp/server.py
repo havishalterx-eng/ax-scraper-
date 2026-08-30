@@ -19,6 +19,7 @@ from .extract import (
     remember_extraction,
 )
 from .state import STATE_JS, format_state
+from . import captcha
 
 mcp = MCPServer("browser-mcp")
 
@@ -555,6 +556,52 @@ async def replay_request(url: str, session: str = DEFAULT_SESSION, method: str =
         {"url": url, "method": method},
     )
     return f"status={result['status']}\n{result['body']}"
+
+
+@mcp.tool()
+async def solve_captcha(session: str = DEFAULT_SESSION) -> str:
+    """Pay 2Captcha to solve a reCAPTCHA, hCaptcha or Cloudflare Turnstile on the current page.
+
+    Try this before request_human_help ONLY when the page is showing an
+    actual CAPTCHA widget - not a login form, not a "sign in to continue"
+    wall, not a cookie banner. Those need a real account or a real person;
+    a solved CAPTCHA token does not get past any of them. Costs a fraction of
+    a cent per call - this is the one paid, per-request step in this whole
+    tool, so do not call it speculatively on a page that might not need it.
+
+    Requires TWOCAPTCHA_API_KEY to be set. Without it, or if solving fails,
+    the answer says so plainly - call request_human_help next rather than
+    retrying this.
+    """
+    api_key = os.environ.get("TWOCAPTCHA_API_KEY")
+    if not api_key:
+        return (
+            "No CAPTCHA-solving service is configured (TWOCAPTCHA_API_KEY is not set). "
+            "Call request_human_help instead."
+        )
+    page = await _get_page(session)
+    widget = await page.evaluate(captcha.DETECT_CAPTCHA_JS)
+    if not widget:
+        return (
+            "No reCAPTCHA, hCaptcha or Cloudflare Turnstile widget was found on this page. "
+            "If this is a login wall or consent page instead, call request_human_help."
+        )
+    try:
+        token = await captcha.solve(api_key, widget["type"], widget["sitekey"], page.url)
+    except captcha.CaptchaSolveError as exc:
+        return f"CAPTCHA solve failed: {exc}. Call request_human_help instead."
+    injected = await page.evaluate(captcha.INJECT_TOKEN_JS, {"token": token, "kind": widget["type"]})
+    # A real <script> tag, not another evaluate call - the callback a widget
+    # registers lives on the page's own window, which page.evaluate cannot
+    # see under patchright's isolated execution world. Confirmed directly:
+    # see the comment on build_callback_script.
+    await page.add_script_tag(content=captcha.build_callback_script(token))
+    cost = captcha.APPROX_COST_USD.get(widget["type"], 0.0)
+    return (
+        f"Solved a {widget['type']} CAPTCHA via 2Captcha (approx ${cost:.4f}) and wrote the token "
+        f"into {injected} field(s) on the page. This does not guarantee the site accepted it - "
+        "call get_state or navigate to check whether the wall is actually gone before continuing."
+    )
 
 
 @mcp.tool()

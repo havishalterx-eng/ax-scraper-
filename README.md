@@ -347,6 +347,49 @@ end to end by driving the UI itself, not just the API.
 - Delivery integrations beyond a plain webhook (Make/n8n/Zapier/email/cloud
   storage) - each needs its own vendor credentials/OAuth app, none set up
 
+## CAPTCHA solving
+
+`request_human_help` covers a CAPTCHA the honest way: pause the run, wait for
+a person. That only works if someone is actually watching, and a real run
+showed the failure mode when nobody is - it fired, nobody cleared it, and the
+model kept going alone for 13 more steps until it hallucinated its way into a
+dead end.
+
+`solve_captcha` is the second option, for when nobody's watching. It detects
+a reCAPTCHA v2, hCaptcha or Cloudflare Turnstile widget on the current page,
+pays 2Captcha a fraction of a cent to solve it, and writes the solved token
+into the page. It is off unless `TWOCAPTCHA_API_KEY` is set - without it, or
+if a solve fails, the tool says so and the model is told to fall back to
+`request_human_help` rather than retry. This is deliberately the only paid,
+per-request step anywhere in this tool; everything else costs Bedrock tokens
+or nothing, which is most of why AX Scraper is cheaper to run than a credit-
+metered competitor - so it only activates on the pages that genuinely need
+it, never speculatively.
+
+Two things worth knowing if you touch this code:
+
+- reCAPTCHA v3 and enterprise variants are not handled. They score a session
+  rather than present a checkbox, so there is nothing to detect and no field
+  to fill.
+- Firing a widget's registered `data-callback` cannot be done through
+  `page.evaluate()`. patchright runs `evaluate` in an isolated JS world on
+  purpose - keeping automation invisible to a page that inspects its own
+  `window` for CDP tells - and a callback registered on the page's real
+  `window` is invisible from that isolated world, in both directions: it
+  cannot be called from there, and its result cannot be read back from there
+  either. Proven directly: a synthetic widget's callback wrote its result
+  into the DOM and that DOM write was visible, while the same callback
+  writing to a `window` property was not, from either world. The token field
+  write happens fine through `evaluate` because the DOM is shared regardless
+  of world; the callback fires through `page.add_script_tag(...)` instead,
+  which runs as a real script in the page's own world.
+
+2Captcha's cost by widget type is a comment in `src/browser_mcp/captcha.py`,
+sourced from their published pricing page at the time this was written, not
+from a live pricing endpoint - they do not expose one. Treat it as an
+order-of-magnitude log line, not a billing record; check 2captcha.com for
+what your account was actually charged.
+
 ## Model choice
 
 The default model is `zai.glm-4.7-flash` in `ap-south-1`. Override it for a single run with `BEDROCK_MODEL_ID=<model-id>`, or set it in the environment before starting the API. The loop itself is model-agnostic.
