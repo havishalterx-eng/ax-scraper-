@@ -481,6 +481,7 @@ async def _finish_job(
             _deliver_webhook(
                 webhook_url,
                 {
+                    "event": "finished",
                     "job_id": job.get("id"),
                     "status": status,
                     "result": job["result"],
@@ -678,6 +679,25 @@ async def _run_agent_job(
                     resume_event = asyncio.Event()
                     job["resume_event"] = resume_event
                     await asyncio.to_thread(_persist_job, job_id, job)
+                    # Seen for real: this fired, nobody was watching the console,
+                    # and the model kept going alone for 13 more steps until it
+                    # hallucinated its way into a dead end. The pause is only
+                    # useful if it reaches someone, so it goes out the same way
+                    # a finished run does - fire-and-forget, a dead endpoint is
+                    # not this run's failure - rather than waiting on the job to
+                    # end.
+                    if webhook_url:
+                        asyncio.create_task(
+                            _deliver_webhook(
+                                webhook_url,
+                                {
+                                    "event": "needs_human",
+                                    "job_id": job_id,
+                                    "session": session,
+                                    "reason": job["human_reason"],
+                                },
+                            )
+                        )
                     await resume_event.wait()
                     job["status"] = "running"
                     text_out += (

@@ -8,6 +8,42 @@ import { cancelTask, createTask, getTask, messageTask, resumeTask } from '../api
 
 const ACTIVE = new Set(['running', 'needs_human']);
 
+// A run that needs a human is only useful if a human actually finds out. Seen
+// for real on the backend: request_human_help fired, nobody was watching the
+// console, and the model kept going alone for 13 more steps before it
+// hallucinated its way into a dead end. A browser notification reaches
+// someone even in a background tab; the beep is easy to miss but costs
+// nothing to try.
+function notifyNeedsHuman(reason) {
+  try {
+    if (typeof Notification !== 'undefined') {
+      const fire = () => new Notification('AX Scraper needs you', { body: reason || 'A run is waiting on a CAPTCHA or sign-in wall.' });
+      if (Notification.permission === 'granted') fire();
+      else if (Notification.permission !== 'denied') Notification.requestPermission().then((p) => { if (p === 'granted') fire(); });
+    }
+  } catch {
+    // Notifications are a courtesy, not the point of this run - a browser
+    // that blocks or lacks the API should not affect anything else here.
+  }
+  try {
+    // A short beep via WebAudio rather than an audio file, so there is
+    // nothing to bundle or fail to load. Browsers block autoplay without a
+    // prior user gesture, so this can silently do nothing - that is fine,
+    // the notification above is the half that is allowed to reach someone.
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
+  } catch {
+    // Same reasoning - best effort only.
+  }
+}
+
 const EXAMPLES = [
   'Find the top 20 wireless headphones on Amazon India with price, rating and source URL.',
   'Collect the first page of Google Maps results for dental clinics in Hyderabad with name, rating and website.',
@@ -31,9 +67,19 @@ export default function RunConsole({ jobId, onJobStarted, session, onSessionChan
   // in an effect rather than during render: writing a ref mid-render is a real
   // React anti-pattern (it can run twice, and it fights concurrent rendering).
   const pollFnRef = useRef(null);
+  // Tracks which job has already triggered a needs_human alert, so a status
+  // that stays needs_human across many poll ticks - the normal case, since it
+  // is waiting on a person - does not re-fire a notification every 1.1s.
+  const notifiedRef = useRef(null);
   const pollImpl = async (id) => {
     try {
       const data = await getTask(id);
+      if (data.status === 'needs_human' && notifiedRef.current !== id) {
+        notifiedRef.current = id;
+        notifyNeedsHuman(data.human_reason);
+      } else if (data.status !== 'needs_human' && notifiedRef.current === id) {
+        notifiedRef.current = null;
+      }
       setJob(data);
       setError('');
       if (ACTIVE.has(data.status)) {
