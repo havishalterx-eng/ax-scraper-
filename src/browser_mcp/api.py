@@ -72,6 +72,27 @@ REGION = os.environ.get("AWS_REGION", "ap-south-1")
 
 # Bedrock errors that mean the model or region is temporarily unavailable.
 # A different model can fix these; permission or validation errors cannot.
+# Bedrock's own constraint on a toolUse name, from a real ValidationException:
+# "Value at '...toolUse.name' failed to satisfy constraint: Member must
+# satisfy regular expression pattern: [a-zA-Z0-9_-]+". A hallucinated tool
+# call is not new here - it just resolves as "Unknown tool" and the run keeps
+# going. What is new, seen for real, is a name mangled with stray XML
+# ("open_order_app_menu_categories</arg_value>"): that still resolves as
+# "Unknown tool" on the turn it happens, but the raw name is already written
+# into `messages` by then, and Bedrock rejects the *next* Converse call
+# outright - killing a conversation that a normal hallucination would have
+# survived. Sanitizing before it enters history keeps both behaviours: still
+# an unknown tool, but one Bedrock will accept hearing about again.
+_VALID_TOOL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def _sanitize_tool_name(name: str) -> str:
+    if _VALID_TOOL_NAME_RE.match(name):
+        return name
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]", "_", name)[:64]
+    return cleaned or "invalid_tool_name"
+
+
 FAILOVER_ERROR_CODES = (
     "ThrottlingException",
     "ServiceUnavailableException",
@@ -531,6 +552,22 @@ async def _run_agent_job(
                         continue
                     raise
             out_message = resp["output"]["message"]
+            for block in out_message["content"]:
+                if "toolUse" in block:
+                    original = block["toolUse"]["name"]
+                    sanitized = _sanitize_tool_name(original)
+                    if sanitized != original:
+                        _log(
+                            job,
+                            {
+                                "type": "system",
+                                "text": (
+                                    f"Model produced an invalid tool name {original!r}; "
+                                    f"sanitized to {sanitized!r} so it doesn't poison the conversation."
+                                ),
+                            },
+                        )
+                        block["toolUse"]["name"] = sanitized
             messages.append(out_message)
 
             for block in out_message["content"]:
