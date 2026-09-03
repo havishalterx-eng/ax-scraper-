@@ -1425,7 +1425,20 @@ async def infrastructure_route(request: Request) -> JSONResponse:
                 "block_media": os.environ.get("BLOCK_MEDIA", "0") not in ("0", "false", "False"),
                 "block_trackers": os.environ.get("BLOCK_TRACKERS", "1") not in ("0", "false", "False"),
             },
-            "captcha": {"configured": False, "note": "No CAPTCHA solver wired in."},
+            "captcha": {
+                "configured": bool(os.environ.get("TWOCAPTCHA_API_KEY")),
+                "note": (
+                    "2Captcha is wired in - solve_captcha pays for a real token on an "
+                    "actual reCAPTCHA/hCaptcha/Turnstile widget, then falls back to a "
+                    "human for anything it can't handle (a login wall, an unsupported "
+                    "CAPTCHA type, or a failed solve)."
+                )
+                if os.environ.get("TWOCAPTCHA_API_KEY")
+                else (
+                    "No TWOCAPTCHA_API_KEY set, so solving is off. When a run hits a "
+                    "challenge it calls for a human instead."
+                ),
+            },
             "delivery": {
                 "webhook": True,
                 "csv_json": True,

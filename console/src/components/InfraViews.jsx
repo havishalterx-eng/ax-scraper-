@@ -37,6 +37,7 @@ export function ProxiesView() {
   const { infra, error, reload } = useInfra();
   const proxy = infra?.proxy;
   const stealth = infra?.stealth;
+  const captcha = infra?.captcha;
 
   return (
     <div className="infra-view">
@@ -104,14 +105,15 @@ export function ProxiesView() {
         <section className="infra-card">
           <div className="infra-card-head">
             <h2 className="infra-card-title">CAPTCHA</h2>
-            <span className="pill pill-idle">not configured</span>
+            <span className={`pill ${captcha?.configured ? 'pill-done' : 'pill-idle'}`}>
+              {captcha?.configured ? '2captcha active' : 'not configured'}
+            </span>
           </div>
-          <p className="infra-note">
-            No solver is wired in. When a run hits a challenge it calls for a human instead — you'll get a
-            “needs you” prompt in the console, and you clear it in the real browser window.
-          </p>
+          {captcha && <p className="infra-note">{captcha.note}</p>}
           <p className="infra-note infra-note-dim">
-            Turn the window on from the sidebar footer toggle before doing that, or there's nothing to click.
+            {captcha?.configured
+              ? 'A run that hits a CAPTCHA solves it automatically and keeps going — nothing to click.'
+              : "When a run hits a challenge it calls for a human instead — you'll get a “needs you” prompt in the console, and you clear it in the real browser window. Turn the window on from the sidebar footer toggle before doing that, or there's nothing to click."}
           </p>
         </section>
       </div>
